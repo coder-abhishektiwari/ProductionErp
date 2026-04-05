@@ -65,7 +65,12 @@ export default function ProductionSheetView() {
               <div class="panel">
                 <div class="panel-title" style="color:var(--accent-danger)"><i class="ph ph-arrow-circle-down"></i> Input Materials (Consumed)</div>
                 <div id="sh-inputs"></div>
-                <button class="btn btn-sm btn-secondary mt-4" id="btn-add-sh-input"><i class="ph ph-plus"></i> Add Material</button>
+                <!-- Dynamic Cost & Weight Summary -->
+                <div class="alert alert-info mt-3 flex justify-between">
+                  <span>Est. Output Weight: <strong id="calc-weight">0 Kg</strong></span>
+                  <span>Est. Total Cost: <strong id="calc-cost">₹0.00</strong></span>
+                </div>
+                <button class="btn btn-sm btn-secondary mt-2" id="btn-add-sh-input"><i class="ph ph-plus"></i> Add Material</button>
               </div>
 
               <!-- Output -->
@@ -73,7 +78,7 @@ export default function ProductionSheetView() {
                 <div class="panel-title" style="color:var(--accent-success)"><i class="ph ph-arrow-circle-up"></i> Output Sheet Produced</div>
                 <div class="form-group">
                   <label class="form-label">Sheet Output (Kg)</label>
-                  <input type="number" class="form-control" id="sh-output-kg" placeholder="Kg produced">
+                  <input type="number" step="0.001" class="form-control" id="sh-output-kg" placeholder="Calculated automatically...">
                 </div>
                 <div class="form-group">
                   <label class="form-label">Remarks</label>
@@ -90,23 +95,32 @@ export default function ProductionSheetView() {
 
         const renderInputs = () => {
             const container = el.querySelector('#sh-inputs');
-            container.innerHTML = inputRows.map((r, idx) => `
-              <div class="inline-row">
-                <select class="form-control sh-type-sel" data-idx="${idx}" style="width:130px">
+            container.innerHTML = inputRows.map((r, idx) => {
+              let unit = 'Kg';
+              if(r.itemType === 'chemical' && r.itemId) {
+                  const ch = chemicals.find(c => c.id === r.itemId);
+                  if(ch) unit = ch.unit || 'Kg';
+              }
+              return `
+              <div class="inline-row mb-2">
+                <select class="form-control sh-type-sel" data-idx="${idx}" style="flex:1">
                   <option value="chemical" ${r.itemType==='chemical'?'selected':''}>Chemical</option>
                   <option value="waste" ${r.itemType==='waste'?'selected':''}>Cutting Waste</option>
                   <option value="sheet" ${r.itemType==='sheet'?'selected':''}>Leftover Sheet</option>
                 </select>
-                <select class="form-control sh-item-sel" data-idx="${idx}" style="flex:1">
+                <select class="form-control sh-item-sel" data-idx="${idx}" style="flex:2">
                   <option value="">-- Select --</option>
-                  ${r.itemType === 'chemical' ? chemicals.map(ch => `<option value="${ch.id}" ${r.itemId===ch.id?'selected':''}>${ch.name} (${ch.unit})</option>`).join('') : ''}
-                  ${r.itemType === 'waste' ? `<option value="waste_nonsilicon" ${r.itemId==='waste_nonsilicon'?'selected':''}>Non-Silicon Cutting Waste (Kg)</option>` : ''}
+                  ${r.itemType === 'chemical' ? chemicals.map(ch => `<option value="${ch.id}" ${r.itemId===ch.id?'selected':''}>${ch.name}</option>`).join('') : ''}
+                  ${r.itemType === 'waste' ? `<option value="waste_nonsilicon" ${r.itemId==='waste_nonsilicon'?'selected':''}>Non-Silicon Waste</option>` : ''}
                   ${r.itemType === 'sheet' ? db.data.sheetTypes.map(s => `<option value="${s.id}" ${r.itemId===s.id?'selected':''}>${s.name}</option>`).join('') : ''}
                 </select>
-                <input type="number" class="form-control sh-qty" data-idx="${idx}" placeholder="Kg" value="${r.qty}" style="width:90px">
+                <div class="flex" style="width:120px; align-items:center;">
+                  <input type="number" step="0.001" class="form-control sh-qty" data-idx="${idx}" placeholder="Qty" value="${r.qty}" style="flex:1; border-top-right-radius:0; border-bottom-right-radius:0;">
+                  <span class="bg-light border text-sm px-2" style="border-left:none; height:36px; line-height:34px; border-top-right-radius:4px; border-bottom-right-radius:4px;">${unit}</span>
+                </div>
                 <button class="btn btn-ghost sh-del" data-idx="${idx}"><i class="ph ph-trash" style="color:var(--accent-danger)"></i></button>
               </div>
-            `).join('');
+            `}).join('');
 
             container.querySelectorAll('.sh-type-sel').forEach(s => s.addEventListener('change', e => {
                 inputRows[+e.target.dataset.idx].itemType = e.target.value;
@@ -115,16 +129,49 @@ export default function ProductionSheetView() {
             }));
             container.querySelectorAll('.sh-item-sel').forEach(s => s.addEventListener('change', e => {
                 inputRows[+e.target.dataset.idx].itemId = e.target.value;
+                renderInputs(); // Requires re-render to update dynamic units visually
             }));
             container.querySelectorAll('.sh-qty').forEach(s => s.addEventListener('input', e => {
                 inputRows[+e.target.dataset.idx].qty = +e.target.value;
+                updateCalculations();
             }));
             container.querySelectorAll('.sh-del').forEach(s => s.addEventListener('click', e => {
                 inputRows.splice(+e.currentTarget.dataset.idx, 1);
                 if (inputRows.length === 0) inputRows.push({ itemId: '', itemType: 'chemical', qty: '' });
                 renderInputs();
             }));
+            updateCalculations();
         };
+
+        const updateCalculations = () => {
+            let totalWeightKg = 0;
+            let totalCost = 0;
+            inputRows.forEach(row => {
+               if(!row.itemId || !row.qty) return;
+               let unit = 'Kg';
+               if(row.itemType === 'chemical') {
+                   const ch = chemicals.find(c => c.id === row.itemId);
+                   unit = ch ? (ch.unit || 'Kg').toLowerCase() : 'kg';
+               }
+               let w = Number(row.qty);
+               if(unit === 'g' || unit === 'gm' || unit === 'ml') { w = w / 1000; }
+               totalWeightKg += w;
+               
+               const rate = db.getItemAverageRate(row.itemId, row.itemType);
+               totalCost += (Number(row.qty) * rate);
+            });
+            totalWeightKg = Math.round(totalWeightKg * 1000) / 1000;
+            
+            const wBtn = el.querySelector('#calc-weight');
+            if(wBtn) wBtn.innerText = `${totalWeightKg} Kg`;
+            const cBtn = el.querySelector('#calc-cost');
+            if(cBtn) cBtn.innerText = `₹${fmt(totalCost)}`;
+            
+            const outKgInput = el.querySelector('#sh-output-kg');
+            if(outKgInput && !outKgInput.dataset.manual) outKgInput.value = totalWeightKg || '';
+        };
+
+        el.querySelector('#sh-output-kg').addEventListener('input', e => { e.target.dataset.manual = 'true'; });
 
         el.querySelector('#btn-add-sh-input').addEventListener('click', () => {
             inputRows.push({ itemId: '', itemType: 'chemical', qty: '' });
@@ -161,25 +208,27 @@ export default function ProductionSheetView() {
             <div class="section-header"><div class="section-title">Sheet Making Batch History</div></div>
             <div class="table-responsive">
               <table class="table">
-                <thead><tr><th>Date</th><th>Type</th><th>Inputs</th><th class="text-right">Output (Kg)</th><th>Operator</th><th>Remarks</th></tr></thead>
+                <thead><tr><th>Date</th><th>Type</th><th>Inputs</th><th class="text-right">Output (Kg)</th><th>Operator</th><th class="text-right">₹/Kg</th><th class="text-right">Total Cost</th></tr></thead>
                 <tbody>
                   ${batches.map(b => {
                     const inputSummary = (b.inputItems || []).map(inp => {
                       const ch = db.data.chemicals.find(c => c.id === inp.itemId);
                       const st = db.data.sheetTypes.find(s => s.id === inp.itemId);
                       const name = ch?.name || st?.name || (inp.itemId === 'waste_nonsilicon' ? 'Waste' : inp.itemId);
-                      return `${name}: ${inp.qty}Kg`;
+                      const unit = ch?.unit || (inp.itemType==='chemical'?'Kg':'Kg');
+                      return `${name}: ${inp.qty}${unit}`;
                     }).join(', ');
                     return `<tr>
                       <td>${b.date}</td>
                       <td><span class="badge badge-${b.productionType==='silicon'?'info':'warning'}">${b.productionType}</span></td>
                       <td class="text-sm">${inputSummary || '-'}</td>
-                      <td class="text-right font-bold">${b.outputKg}</td>
+                      <td class="text-right font-bold text-primary">${b.outputKg}</td>
                       <td>${b.operatorName || '-'}</td>
-                      <td class="text-sm text-muted">${b.narration || '-'}</td>
+                      <td class="text-right">₹${fmt(b.costPerKg||0)}</td>
+                      <td class="text-right font-bold text-success">₹${fmt(b.totalCost||0)}</td>
                     </tr>`;
                   }).join('')}
-                  ${batches.length===0?'<tr><td colspan="6" class="text-center text-muted">No batches yet</td></tr>':''}
+                  ${batches.length===0?'<tr><td colspan="7" class="text-center text-muted">No batches yet</td></tr>':''}
                 </tbody>
               </table>
             </div>

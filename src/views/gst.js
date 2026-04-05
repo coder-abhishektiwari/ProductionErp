@@ -53,23 +53,28 @@ export default function GSTView() {
     };
 
     const renderGSTR1 = (el) => {
-        const invoices = [...db.data.salesInvoices].reverse();
+        const invoices = [...db.data.salesInvoices].map(i => ({...i, isReturn: false}));
+        const returns = [...db.data.salesReturns].map(r => ({...r, invoiceNo: r.creditNoteNo, isReturn: true}));
+        const records = [...invoices, ...returns].sort((a,b) => new Date(b.date) - new Date(a.date));
+        
         el.innerHTML = `
           <div class="card">
             <div class="section-header"><div class="section-title">GSTR-1: Outward Supplies</div></div>
             <div class="table-responsive">
               <table class="table">
-                <thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>GSTIN</th><th class="text-right">Taxable</th><th class="text-right">CGST</th><th class="text-right">SGST</th><th class="text-right">IGST</th><th class="text-right">Total</th></tr></thead>
+                <thead><tr><th>Document No</th><th>Date</th><th>Customer</th><th>GSTIN</th><th class="text-right">Taxable</th><th class="text-right">CGST</th><th class="text-right">SGST</th><th class="text-right">IGST</th><th class="text-right">Total</th></tr></thead>
                 <tbody>
-                  ${invoices.map(inv => {
+                  ${records.map(inv => {
                     const cust = db.data.customers.find(cu => cu.id === inv.customerId);
-                    return `<tr><td>${inv.invoiceNo}</td><td>${inv.date}</td><td>${cust?.name||'-'}</td><td class="text-xs">${cust?.gstin||'-'}</td>
-                      <td class="text-right">₹${fmt(inv.subtotal)}</td>
-                      <td class="text-right">₹${fmt(inv.cgst)}</td><td class="text-right">₹${fmt(inv.sgst)}</td>
-                      <td class="text-right">₹${fmt(inv.igst)}</td>
-                      <td class="text-right font-bold">₹${fmt(inv.grandTotal)}</td></tr>`;
+                    const mult = inv.isReturn ? -1 : 1;
+                    const docLabel = inv.isReturn ? `<span class="badge" style="background:var(--accent-danger);color:white;font-size:0.7rem;padding:2px 4px;">CN</span> ${inv.invoiceNo}` : inv.invoiceNo;
+                    return `<tr><td>${docLabel}</td><td>${inv.date}</td><td>${cust?.name||'-'}</td><td class="text-xs">${cust?.gstin||'-'}</td>
+                      <td class="text-right">₹${fmt(inv.subtotal * mult)}</td>
+                      <td class="text-right">₹${fmt(inv.cgst * mult)}</td><td class="text-right">₹${fmt(inv.sgst * mult)}</td>
+                      <td class="text-right">₹${fmt(inv.igst * mult)}</td>
+                      <td class="text-right font-bold">₹${fmt(inv.grandTotal * mult)}</td></tr>`;
                   }).join('')}
-                  ${invoices.length===0?'<tr><td colspan="9" class="text-center text-muted">No sales invoices</td></tr>':''}
+                  ${records.length===0?'<tr><td colspan="9" class="text-center text-muted">No sales or returns</td></tr>':''}
                 </tbody>
               </table>
             </div>
@@ -78,23 +83,28 @@ export default function GSTView() {
     };
 
     const renderInput = (el) => {
-        const invoices = [...db.data.purchaseInvoices].reverse();
+        const invoices = [...db.data.purchaseInvoices].map(i => ({...i, isReturn: false}));
+        const returns = [...db.data.purchaseReturns].map(r => ({...r, invoiceNo: r.debitNoteNo, isReturn: true}));
+        const records = [...invoices, ...returns].sort((a,b) => new Date(b.date) - new Date(a.date));
+        
         el.innerHTML = `
           <div class="card">
             <div class="section-header"><div class="section-title">GST Input Tax Register</div></div>
             <div class="table-responsive">
               <table class="table">
-                <thead><tr><th>Invoice</th><th>Date</th><th>Supplier</th><th class="text-right">Taxable</th><th class="text-right">CGST</th><th class="text-right">SGST</th><th class="text-right">IGST</th><th class="text-right">Total</th></tr></thead>
+                <thead><tr><th>Document No</th><th>Date</th><th>Supplier</th><th class="text-right">Taxable</th><th class="text-right">CGST</th><th class="text-right">SGST</th><th class="text-right">IGST</th><th class="text-right">Total</th></tr></thead>
                 <tbody>
-                  ${invoices.map(inv => {
+                  ${records.map(inv => {
                     const sup = db.data.suppliers.find(s => s.id === inv.supplierId);
-                    return `<tr><td>${inv.invoiceNo}</td><td>${inv.date}</td><td>${sup?.name||'-'}</td>
-                      <td class="text-right">₹${fmt(inv.subtotal)}</td>
-                      <td class="text-right">₹${fmt(inv.cgst)}</td><td class="text-right">₹${fmt(inv.sgst)}</td>
-                      <td class="text-right">₹${fmt(inv.igst)}</td>
-                      <td class="text-right font-bold">₹${fmt(inv.grandTotal)}</td></tr>`;
+                    const mult = inv.isReturn ? -1 : 1;
+                    const docLabel = inv.isReturn ? `<span class="badge" style="background:var(--accent-warning);color:black;font-size:0.7rem;padding:2px 4px;">DN</span> ${inv.invoiceNo}` : inv.invoiceNo;
+                    return `<tr><td>${docLabel}</td><td>${inv.date}</td><td>${sup?.name||'-'}</td>
+                      <td class="text-right">₹${fmt(inv.subtotal * mult)}</td>
+                      <td class="text-right">₹${fmt(inv.cgst * mult)}</td><td class="text-right">₹${fmt(inv.sgst * mult)}</td>
+                      <td class="text-right">₹${fmt(inv.igst * mult)}</td>
+                      <td class="text-right font-bold">₹${fmt(inv.grandTotal * mult)}</td></tr>`;
                   }).join('')}
-                  ${invoices.length===0?'<tr><td colspan="8" class="text-center text-muted">No purchase invoices</td></tr>':''}
+                  ${records.length===0?'<tr><td colspan="8" class="text-center text-muted">No purchases or returns</td></tr>':''}
                 </tbody>
               </table>
             </div>

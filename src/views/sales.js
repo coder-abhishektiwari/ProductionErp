@@ -1,10 +1,20 @@
 import { db, formatDate, fmt } from '../store/db.js';
+import { printDocument } from '../utils/print.js';
 
 export default function SalesView() {
     const c = document.createElement('div');
     c.className = 'animate-fade-in';
     let activeTab = 'entry';
     let items = [{ productId: '', qty: '', rate: '', gstRate: 18, hsnCode: '' }];
+
+    // EVENT DELEGATION FIX FOR MEMORY LEAK
+    c.addEventListener('click', e => {
+        const t = e.target.closest('.tab');
+        if (t && c.contains(t)) {
+            activeTab = t.dataset.tab;
+            render();
+        }
+    });
 
     const render = () => {
         c.innerHTML = `
@@ -15,7 +25,6 @@ export default function SalesView() {
           </div>
           <div id="tab-content"></div>
         `;
-        c.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { activeTab = t.dataset.tab; render(); }));
         const content = c.querySelector('#tab-content');
         if (activeTab === 'entry') renderEntry(content);
         else if (activeTab === 'register') renderRegister(content);
@@ -164,13 +173,16 @@ export default function SalesView() {
 
             let sub = 0, gstTotal = 0;
             items.forEach(item => { const amt = (item.qty||0)*(item.rate||0); sub += amt; gstTotal += amt*((item.gstRate||0)/100); });
+            
+            sub = Math.round(sub * 100) / 100;
+            gstTotal = Math.round(gstTotal * 100) / 100; // FIX precision
 
             el.querySelector('#sal-summary').innerHTML = `
               <div class="flex justify-between mb-2"><span>Subtotal</span><span class="font-bold">₹${fmt(sub)}</span></div>
               ${isInter ?
                 `<div class="flex justify-between mb-2"><span>IGST</span><span>₹${fmt(gstTotal)}</span></div>` :
-                `<div class="flex justify-between mb-2"><span>CGST</span><span>₹${fmt(gstTotal/2)}</span></div>
-                 <div class="flex justify-between mb-2"><span>SGST</span><span>₹${fmt(gstTotal/2)}</span></div>`
+                `<div class="flex justify-between mb-2"><span>CGST</span><span>₹${fmt(Math.round((gstTotal/2) * 100) / 100)}</span></div>
+                 <div class="flex justify-between mb-2"><span>SGST</span><span>₹${fmt(Math.round((gstTotal/2) * 100) / 100)}</span></div>`
               }
               <hr class="divider">
               <div class="flex justify-between"><span class="font-bold">Grand Total</span><span class="font-bold" style="font-size:1.1rem">₹${fmt(sub + gstTotal)}</span></div>
@@ -219,21 +231,109 @@ export default function SalesView() {
             <div class="section-header"><div class="section-title">Sales Register</div></div>
             <div class="table-responsive">
               <table class="table">
-                <thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th class="text-right">Subtotal</th><th class="text-right">GST</th><th class="text-right">Grand Total</th></tr></thead>
+                <thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th class="text-right">Subtotal</th><th class="text-right">GST</th><th class="text-right">Grand Total</th><th class="text-center">Action</th></tr></thead>
                 <tbody>
                   ${invoices.map(inv => {
                     const cust = db.data.customers.find(cu => cu.id === inv.customerId);
                     return `<tr><td>${inv.date}</td><td>${inv.invoiceNo}</td><td>${cust?.name||'N/A'}</td>
                       <td class="text-right">₹${fmt(inv.subtotal)}</td>
                       <td class="text-right">₹${fmt(inv.cgst+inv.sgst+inv.igst)}</td>
-                      <td class="text-right font-bold">₹${fmt(inv.grandTotal)}</td></tr>`;
+                      <td class="text-right font-bold">₹${fmt(inv.grandTotal)}</td>
+                      <td>
+                        <button class="btn btn-sm btn-ghost btn-print" data-id="${inv.id}" title="Print Invoice"><i class="ph ph-printer" style="color:var(--accent-primary)"></i></button>
+                        <button class="btn btn-sm btn-ghost del-sal-inv" data-id="${inv.id}" title="Delete Invoice"><i class="ph ph-trash" style="color:var(--accent-danger)"></i></button>
+                      </td></tr>`;
                   }).join('')}
-                  ${invoices.length===0?'<tr><td colspan="6" class="text-center text-muted">No sales yet</td></tr>':''}
+                  ${invoices.length===0?'<tr><td colspan="7" class="text-center text-muted">No sales yet</td></tr>':''}
                 </tbody>
               </table>
             </div>
           </div>
         `;
+        el.querySelectorAll('.del-sal-inv').forEach(btn => btn.addEventListener('click', e => {
+            if(confirm('Delete this Sales Invoice completely?')){
+               db.deleteSalesInvoice(e.currentTarget.dataset.id);
+               render();
+            }
+        }));
+
+        el.querySelectorAll('.btn-print').forEach(btn => btn.addEventListener('click', e => {
+            const inv = db.data.salesInvoices.find(i => i.id === e.currentTarget.dataset.id);
+            const cu = db.data.customers.find(c => c.id === inv.customerId);
+            const co = db.data.companyInfo;
+            
+            const printArea = document.createElement('div');
+            printArea.className = 'print-only';
+            printArea.innerHTML = `
+                <div style="font-family: sans-serif; max-width: 800px; margin: 0 auto; color: #000;">
+                    <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+                        <h1 style="margin:0; font-size: 24px">${co.name}</h1>
+                        <p style="margin: 5px 0; font-size: 14px;">${co.address} | GSTIN: ${co.gstin}</p>
+                        <h3 style="margin: 10px 0 0 0;">TAX INVOICE</h3>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px;">
+                        <div>
+                           <b>Billed To:</b><br/>
+                           ${cu.name}<br/>${cu.address || ''}<br/>GSTIN: ${cu.gstin || 'URD'}
+                        </div>
+                        <div style="text-align: right;">
+                           <b>Invoice No:</b> ${inv.invoiceNo}<br/>
+                           <b>Date:</b> ${inv.date}<br/>
+                           <b>Payment:</b> ${inv.paymentMode.toUpperCase()}
+                        </div>
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+                       <thead>
+                         <tr style="background: #eee;">
+                           <th style="border: 1px solid #000; padding: 8px; text-align: left;">Item Description</th>
+                           <th style="border: 1px solid #000; padding: 8px;">HSN</th>
+                           <th style="border: 1px solid #000; padding: 8px;">Qty</th>
+                           <th style="border: 1px solid #000; padding: 8px;">Rate (₹)</th>
+                           <th style="border: 1px solid #000; padding: 8px;">Amount (₹)</th>
+                         </tr>
+                       </thead>
+                       <tbody>
+                         ${(inv.items||[]).map(i => {
+                           const prod = db.data.products.find(p => p.id === i.productId);
+                           return `
+                           <tr>
+                             <td style="border: 1px solid #000; padding: 8px;">${prod?.name || 'Item'}</td>
+                             <td style="border: 1px solid #000; padding: 8px; text-align: center;">${i.hsnCode || '-'}</td>
+                             <td style="border: 1px solid #000; padding: 8px; text-align: center;">${i.qty}</td>
+                             <td style="border: 1px solid #000; padding: 8px; text-align: right;">${fmt(i.rate)}</td>
+                             <td style="border: 1px solid #000; padding: 8px; text-align: right;">${fmt(i.qty * i.rate)}</td>
+                           </tr>`;
+                         }).join('')}
+                       </tbody>
+                    </table>
+                    <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                       <div style="width: 50%;">
+                          <br/><br/>
+                          <i>All disputes are subject to local jurisdiction.</i>
+                       </div>
+                       <div style="width: 40%;">
+                         <table style="width: 100%; border-collapse: collapse;">
+                            <tr><td style="padding: 4px;">Subtotal:</td><td style="text-align:right">₹${fmt(inv.subtotal)}</td></tr>
+                            ${inv.cgst ? `<tr><td style="padding: 4px;">CGST:</td><td style="text-align:right">₹${fmt(inv.cgst)}</td></tr>` : ''}
+                            ${inv.sgst ? `<tr><td style="padding: 4px;">SGST:</td><td style="text-align:right">₹${fmt(inv.sgst)}</td></tr>` : ''}
+                            ${inv.igst ? `<tr><td style="padding: 4px;">IGST:</td><td style="text-align:right">₹${fmt(inv.igst)}</td></tr>` : ''}
+                            <tr style="font-weight: bold; border-top: 1px solid #000;">
+                               <td style="padding: 8px 4px;">Grand Total:</td><td style="text-align:right">₹${fmt(inv.grandTotal)}</td>
+                            </tr>
+                         </table>
+                       </div>
+                    </div>
+                    <div style="margin-top: 50px; text-align: right; font-size: 14px;">
+                       <b>For ${co.name}</b><br/><br/><br/>Authorized Signatory
+                    </div>
+                </div>
+            `;
+            
+            document.querySelectorAll('.print-only').forEach(el => el.remove());
+            document.body.appendChild(printArea);
+            window.print();
+            setTimeout(() => printArea.remove(), 1000);
+        }));
     };
 
     const renderReceivables = (el) => {

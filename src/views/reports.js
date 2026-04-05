@@ -37,14 +37,18 @@ export default function ReportsView() {
               <div class="text-sm text-muted">As on ${formatDate()}</div></div>
             <div class="table-responsive">
               <table class="table">
-                <thead><tr><th>Account</th><th>Group</th><th class="text-right">Debit (₹)</th><th class="text-right">Credit (₹)</th></tr></thead>
+                <thead><tr><th>Account Head / Group</th><th class="text-right">Debit (₹)</th><th class="text-right">Credit (₹)</th></tr></thead>
                 <tbody>
-                  ${tb.accounts.map(r => `<tr><td class="font-medium">${r.account.name}</td><td class="text-sm text-muted">${r.account.group}</td>
-                    <td class="text-right">${r.dr > 0 ? '₹'+fmt(r.dr) : ''}</td><td class="text-right">${r.cr > 0 ? '₹'+fmt(r.cr) : ''}</td></tr>`).join('')}
-                  ${tb.accounts.length===0?'<tr><td colspan="4" class="text-center text-muted">No transactions</td></tr>':''}
+                  ${tb.groups.map(g => `
+                    <tr class="bg-gray-50"><td class="font-bold">${g.name}</td><td class="text-right font-bold">${g.dr > 0 ? '₹'+fmt(g.dr) : ''}</td><td class="text-right font-bold">${g.cr > 0 ? '₹'+fmt(g.cr) : ''}</td></tr>
+                    ${g.accounts.map(acc => `
+                        <tr><td style="padding-left:1.5rem" class="text-sm text-muted">${acc.name}</td><td class="text-right text-sm">${acc.dr > 0 ? '₹'+fmt(acc.dr) : ''}</td><td class="text-right text-sm">${acc.cr > 0 ? '₹'+fmt(acc.cr) : ''}</td></tr>
+                    `).join('')}
+                  `).join('')}
+                  ${tb.groups.length===0?'<tr><td colspan="3" class="text-center text-muted">No transactions</td></tr>':''}
                 </tbody>
                 <tfoot><tr style="border-top:2px solid var(--border-color)">
-                  <td colspan="2" class="text-right font-bold">Total</td>
+                  <td class="text-right font-bold">Total</td>
                   <td class="text-right font-bold ${tb.totDr.toFixed(2)!==tb.totCr.toFixed(2)?'text-danger':'text-success'}">₹${fmt(tb.totDr)}</td>
                   <td class="text-right font-bold ${tb.totDr.toFixed(2)!==tb.totCr.toFixed(2)?'text-danger':'text-success'}">₹${fmt(tb.totCr)}</td>
                 </tr></tfoot>
@@ -53,6 +57,7 @@ export default function ReportsView() {
             ${tb.totDr.toFixed(2)===tb.totCr.toFixed(2) ? '<div class="text-success text-sm mt-2"><i class="ph ph-check-circle"></i> Trial Balance is balanced ✓</div>' : '<div class="text-danger text-sm mt-2"><i class="ph ph-warning"></i> Trial Balance NOT balanced — Difference: ₹'+fmt(Math.abs(tb.totDr-tb.totCr))+'</div>'}
           </div>
         `;
+        // attachExcelFilters is now handled globally in main.js
     };
 
     // ══════════════════════════════════════
@@ -68,18 +73,24 @@ export default function ReportsView() {
               <div>
                 <h3 style="margin-bottom:0.75rem;border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;color:var(--accent-danger)">Expenses (Dr)</h3>
                 <table class="table"><tbody>
-                  ${pl.expenses.map(e => `<tr><td>${e.name}</td><td class="text-right">₹${fmt(e.amount)}</td></tr>`).join('')}
+                  ${pl.expenses.map(g => `
+                    <tr class="bg-gray-50"><td class="font-bold">${g.name}</td><td class="text-right font-bold">₹${fmt(g.total)}</td></tr>
+                    ${g.items.map(i => `<tr><td style="padding-left:1.5rem" class="text-sm text-muted">${i.name}</td><td class="text-right text-sm">₹${fmt(i.amount)}</td></tr>`).join('')}
+                  `).join('')}
                   ${pl.expenses.length===0?'<tr><td class="text-muted">No expenses</td></tr>':''}
-                </tbody><tfoot><tr style="border-top:1px dashed var(--border-color)"><td class="font-bold">Total Expenses</td><td class="text-right font-bold">₹${fmt(pl.totalExpense)}</td></tr>
+                </tbody><tfoot><tr style="border-top:2px solid var(--border-color)"><td class="font-bold">Total Expenses</td><td class="text-right font-bold">₹${fmt(pl.totalExpense)}</td></tr>
                   <tr><td class="font-bold ${pl.netProfit>=0?'text-success':'text-danger'}">${pl.netProfit>=0?'Net Profit':'Net Loss'}</td><td class="text-right font-bold ${pl.netProfit>=0?'text-success':'text-danger'}">₹${fmt(Math.abs(pl.netProfit))}</td></tr>
                 </tfoot></table>
               </div>
               <div>
                 <h3 style="margin-bottom:0.75rem;border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;color:var(--accent-success)">Incomes (Cr)</h3>
                 <table class="table"><tbody>
-                  ${pl.incomes.map(i => `<tr><td>${i.name}</td><td class="text-right">₹${fmt(i.amount)}</td></tr>`).join('')}
+                   ${pl.incomes.map(g => `
+                    <tr class="bg-gray-50"><td class="font-bold">${g.name}</td><td class="text-right font-bold">₹${fmt(g.total)}</td></tr>
+                    ${g.items.map(i => `<tr><td style="padding-left:1.5rem" class="text-sm text-muted">${i.name}</td><td class="text-right text-sm">₹${fmt(i.amount)}</td></tr>`).join('')}
+                  `).join('')}
                   ${pl.incomes.length===0?'<tr><td class="text-muted">No income</td></tr>':''}
-                </tbody><tfoot><tr style="border-top:1px dashed var(--border-color)"><td class="font-bold">Total Income</td><td class="text-right font-bold">₹${fmt(pl.totalIncome)}</td></tr></tfoot></table>
+                </tbody><tfoot><tr style="border-top:2px solid var(--border-color)"><td class="font-bold">Total Income</td><td class="text-right font-bold">₹${fmt(pl.totalIncome)}</td></tr></tfoot></table>
               </div>
             </div>
           </div>
@@ -97,18 +108,24 @@ export default function ReportsView() {
               <div class="text-sm text-muted">As on ${formatDate()}</div></div>
             <div class="grid-2" style="gap:2rem">
               <div>
-                <h3 style="margin-bottom:0.75rem;border-bottom:1px solid var(--border-color);padding-bottom:0.5rem">Liabilities & Capital</h3>
+                <h3 style="margin-bottom:0.75rem;border-bottom:2px solid var(--border-color);padding-bottom:0.5rem">Liabilities & Capital</h3>
                 <table class="table"><tbody>
-                  ${bs.liabilities.items.map(i => `<tr><td>${i.name}</td><td class="text-right">₹${fmt(i.amount)}</td></tr>`).join('')}
-                  ${bs.liabilities.items.length===0?'<tr><td class="text-muted">None</td></tr>':''}
-                </tbody><tfoot><tr style="border-top:1px dashed var(--border-color)"><td class="font-bold">Total</td><td class="text-right font-bold">₹${fmt(bs.liabilities.total)}</td></tr></tfoot></table>
+                  ${bs.liabilities.subGroups.map(g => `
+                    <tr class="bg-gray-50"><td class="font-bold">${g.name}</td><td class="text-right font-bold">₹${fmt(g.total)}</td></tr>
+                    ${g.items.map(i => `<tr><td style="padding-left:1.5rem" class="text-sm text-muted">${i.name}</td><td class="text-right text-sm">₹${fmt(i.amount)}</td></tr>`).join('')}
+                  `).join('')}
+                  ${bs.liabilities.subGroups.length===0?'<tr><td class="text-muted">None</td></tr>':''}
+                </tbody><tfoot><tr style="border-top:2px solid var(--border-color)"><td class="font-bold">Total</td><td class="text-right font-bold">₹${fmt(bs.liabilities.total)}</td></tr></tfoot></table>
               </div>
               <div>
-                <h3 style="margin-bottom:0.75rem;border-bottom:1px solid var(--border-color);padding-bottom:0.5rem">Assets</h3>
+                <h3 style="margin-bottom:0.75rem;border-bottom:2px solid var(--border-color);padding-bottom:0.5rem">Assets</h3>
                 <table class="table"><tbody>
-                  ${bs.assets.items.map(i => `<tr><td>${i.name}</td><td class="text-right">₹${fmt(i.amount)}</td></tr>`).join('')}
-                  ${bs.assets.items.length===0?'<tr><td class="text-muted">None</td></tr>':''}
-                </tbody><tfoot><tr style="border-top:1px dashed var(--border-color)"><td class="font-bold">Total</td><td class="text-right font-bold">₹${fmt(bs.assets.total)}</td></tr></tfoot></table>
+                   ${bs.assets.subGroups.map(g => `
+                    <tr class="bg-gray-50"><td class="font-bold">${g.name}</td><td class="text-right font-bold">₹${fmt(g.total)}</td></tr>
+                    ${g.items.map(i => `<tr><td style="padding-left:1.5rem" class="text-sm text-muted">${i.name}</td><td class="text-right text-sm">₹${fmt(i.amount)}</td></tr>`).join('')}
+                  `).join('')}
+                  ${bs.assets.subGroups.length===0?'<tr><td class="text-muted">None</td></tr>':''}
+                </tbody><tfoot><tr style="border-top:2px solid var(--border-color)"><td class="font-bold">Total</td><td class="text-right font-bold">₹${fmt(bs.assets.total)}</td></tr></tfoot></table>
               </div>
             </div>
           </div>
@@ -120,51 +137,95 @@ export default function ReportsView() {
     // ══════════════════════════════════════
     const renderLedger = (el) => {
         const allAccounts = db.data.accounts;
-        el.innerHTML = `
-          <div class="card">
-            <div class="section-header"><div class="section-title">Account Ledger</div></div>
-            <div class="form-group mb-4">
-              <label class="form-label">Select Account</label>
-              <select class="form-control" id="ledger-acc">
-                <option value="">-- Select --</option>
-                ${allAccounts.map(a => `<option value="${a.id}">${a.name} (${a.group})</option>`).join('')}
-              </select>
-            </div>
-            <div id="ledger-entries"></div>
-          </div>
-        `;
-        el.querySelector('#ledger-acc').addEventListener('change', e => {
-            const entries = db.getLedgerEntries(e.target.value);
-            const balance = db.getLedgerBalance(e.target.value);
+        let fromDate = formatDate(new Date(new Date().getFullYear(), 0, 1)); // Start of year
+        let toDate = formatDate();
+        let selectedAccId = '';
+
+        const updateReport = () => {
+            if (!selectedAccId) { el.querySelector('#ledger-entries').innerHTML = ''; return; }
+            const report = db.getDetailedLedgerReport(selectedAccId, fromDate, toDate, 'all');
             const entriesEl = el.querySelector('#ledger-entries');
-            if (!e.target.value) { entriesEl.innerHTML = ''; return; }
             
-            let runBal = 0;
+            let runBal = report.openingBal;
             entriesEl.innerHTML = `
               <div class="table-responsive">
-                <table class="table">
-                  <thead><tr><th>Date</th><th>Vch No</th><th>Type</th><th>Narration</th><th class="text-right">Debit</th><th class="text-right">Credit</th><th class="text-right">Running Bal</th></tr></thead>
-                  <tbody>
-                    ${entries.map(e => {
+                <table class="table" id="ledger-table">
+                  <thead>
+                    <tr class="bg-gray-100"><th colspan="4" class="font-bold">Opening Balance (b/f)</th><th colspan="2"></th><th class="text-right font-bold">${runBal >= 0 ? '₹'+fmt(runBal)+' Dr' : '₹'+fmt(Math.abs(runBal))+' Cr'}</th></tr>
+                    <tr><th>Date</th><th>Vch No</th><th>Type</th><th>Narration</th><th class="text-right">Debit</th><th class="text-right">Credit</th><th class="text-right">Balance</th></tr>
+                  </thead>
+                  <tbody id="ledger-body">
+                    ${report.entries.map(e => {
                       runBal += e.drAmount - e.crAmount;
-                      return `<tr><td>${e.voucher?.date||'-'}</td><td>${e.voucher?.voucherNo||'-'}</td>
+                      return `<tr class="ledger-row" data-vid="${e.voucherId}" title="Double click to edit">
+                        <td>${e.voucher?.date||'-'}</td><td>${e.voucher?.voucherNo||'-'}</td>
                         <td><span class="badge badge-info">${e.voucher?.type||'-'}</span></td>
-                        <td class="text-xs text-muted">${(e.voucher?.narration||'').substring(0,40)}</td>
+                        <td class="text-xs text-muted narration-cell">${(e.voucher?.narration||'').substring(0,80)}</td>
                         <td class="text-right">${e.drAmount > 0 ? '₹'+fmt(e.drAmount) : ''}</td>
                         <td class="text-right">${e.crAmount > 0 ? '₹'+fmt(e.crAmount) : ''}</td>
                         <td class="text-right font-bold">${runBal >= 0 ? '₹'+fmt(runBal)+' Dr' : '₹'+fmt(Math.abs(runBal))+' Cr'}</td>
                       </tr>`;
                     }).join('')}
-                    ${entries.length===0?'<tr><td colspan="7" class="text-center text-muted">No entries</td></tr>':''}
+                    ${report.entries.length===0?'<tr><td colspan="7" class="text-center text-muted">No transactions in this period</td></tr>':''}
                   </tbody>
-                  <tfoot><tr style="border-top:2px solid var(--border-color)">
+                  <tfoot><tr class="bg-gray-100">
                     <td colspan="6" class="text-right font-bold">Closing Balance</td>
-                    <td class="text-right font-bold">${balance >= 0 ? '₹'+fmt(balance)+' Dr' : '₹'+fmt(Math.abs(balance))+' Cr'}</td>
+                    <td class="text-right font-bold">${report.closingBal >= 0 ? '₹'+fmt(report.closingBal)+' Dr' : '₹'+fmt(Math.abs(report.closingBal))+' Cr'}</td>
                   </tr></tfoot>
                 </table>
               </div>
             `;
+
+            // Double click to edit
+            entriesEl.querySelectorAll('.ledger-row').forEach(row => {
+                row.addEventListener('dblclick', () => {
+                    const vid = row.dataset.vid;
+                    const vch = db.data.vouchers.find(v => v.id === vid);
+                    if (vch) alert(`Edit Logic for ${vch.type} #${vch.voucherNo} initiated (Voucher ID: ${vid})\nIn a real app, this would open the ${vch.type} screen in edit mode.`);
+                });
+            });
+
+            // attachExcelFilters(table) handled globally
+        };
+
+        el.innerHTML = `
+          <div class="card">
+            <div class="section-header"><div class="section-title">Account Ledger</div></div>
+            
+            <div class="grid-3 mb-4" style="align-items: flex-end; gap: 1rem">
+              <div class="form-group">
+                <label class="form-label">Search Account</label>
+                <input list="acc-list" class="form-control" id="ledger-search" placeholder="Type to search ledger...">
+                <datalist id="acc-list">
+                    ${allAccounts.sort((a,b)=>a.name.localeCompare(b.name)).map(a => `<option data-id="${a.id}" value="${a.name} (${a.group})">`).join('')}
+                </datalist>
+              </div>
+              <div class="form-group">
+                <label class="form-label">From Date</label>
+                <input type="date" class="form-control" id="l-from" value="${fromDate}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">To Date</label>
+                <input type="date" class="form-control" id="l-to" value="${toDate}">
+              </div>
+            </div>
+
+            <div id="ledger-entries"></div>
+          </div>
+        `;
+
+        const lSearch = el.querySelector('#ledger-search');
+        lSearch.addEventListener('change', () => {
+            const val = lSearch.value;
+            const opt = Array.from(el.querySelectorAll('#acc-list option')).find(o => o.value === val);
+            if (opt) {
+                selectedAccId = opt.dataset.id;
+                updateReport();
+            }
         });
+
+        el.querySelector('#l-from').addEventListener('change', e => { fromDate = e.target.value; updateReport(); });
+        el.querySelector('#l-to').addEventListener('change', e => { toDate = e.target.value; updateReport(); });
     };
 
     // ══════════════════════════════════════
@@ -385,7 +446,7 @@ export default function ReportsView() {
           <div class="grid-2">
             <div class="card">
               <div class="section-header"><div class="section-title">Receivable from Customers (${receivables.length})</div></div>
-              <table class="table"><thead><tr><th>Customer</th><th>GSTIN</th><th class="text-right">Amount Due</th></tr></thead>
+              <table class="table" id="receivable-table"><thead><tr><th>Customer</th><th>GSTIN</th><th class="text-right">Amount Due</th></tr></thead>
               <tbody>${receivables.map(r => `<tr><td class="font-medium">${r.party.name}</td><td class="text-sm text-muted">${r.party.gstin||'-'}</td><td class="text-right font-bold text-success">₹${fmt(r.amount)}</td></tr>`).join('')}
               ${!receivables.length?'<tr><td colspan="3" class="text-center text-muted">No outstanding receivables</td></tr>':''}
               </tbody>
@@ -395,7 +456,7 @@ export default function ReportsView() {
 
             <div class="card">
               <div class="section-header"><div class="section-title">Payable to Suppliers (${payables.length})</div></div>
-              <table class="table"><thead><tr><th>Supplier</th><th>GSTIN</th><th class="text-right">Amount Due</th></tr></thead>
+              <table class="table" id="payable-table"><thead><tr><th>Supplier</th><th>GSTIN</th><th class="text-right">Amount Due</th></tr></thead>
               <tbody>${payables.map(r => `<tr><td class="font-medium">${r.party.name}</td><td class="text-sm text-muted">${r.party.gstin||'-'}</td><td class="text-right font-bold text-danger">₹${fmt(r.amount)}</td></tr>`).join('')}
               ${!payables.length?'<tr><td colspan="3" class="text-center text-muted">No outstanding payables</td></tr>':''}
               </tbody>
@@ -404,6 +465,7 @@ export default function ReportsView() {
             </div>
           </div>
         `;
+        // attachExcelFilters(rt/pt) handled globally
     };
 
     // ══════════════════════════════════════

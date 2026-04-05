@@ -1,4 +1,5 @@
 import { db, formatDate, fmt } from '../store/db.js';
+import { printDocument } from '../utils/print.js';
 
 export default function PurchaseReturnView() {
     const c = document.createElement('div');
@@ -129,13 +130,19 @@ export default function PurchaseReturnView() {
                   return `<tr><td>${r.date}</td><td class="font-medium">${r.debitNoteNo}</td><td>${sup?.name||'N/A'}</td>
                     <td class="text-sm">${r.originalInvoiceNo||'-'}</td><td class="text-sm text-muted">${r.reason||'-'}</td>
                     <td class="text-right font-bold text-danger">₹${fmt(r.grandTotal)}</td>
-                    <td><button class="btn btn-sm btn-ghost del-pr" data-id="${r.id}"><i class="ph ph-trash" style="color:var(--accent-danger)"></i></button></td></tr>`;
+                    <td>
+                      <button class="btn btn-sm btn-ghost btn-print" data-id="${r.id}"><i class="ph ph-printer" style="color:var(--accent-primary)"></i></button>
+                      <button class="btn btn-sm btn-ghost del-pr" data-id="${r.id}"><i class="ph ph-trash" style="color:var(--accent-danger)"></i></button>
+                    </td></tr>`;
                 }).join('')}
                 ${!returns.length ? '<tr><td colspan="7" class="text-center text-muted">No purchase returns yet</td></tr>' : ''}
               </tbody>
             </table></div>
           </div>
         `;
+        el.querySelectorAll('.btn-print').forEach(btn => btn.addEventListener('click', e => {
+            printDocument('debit_note', e.currentTarget.dataset.id);
+        }));
         el.querySelectorAll('.del-pr').forEach(btn => btn.addEventListener('click', e => {
             if(confirm('Delete this debit note?')) { db.deletePurchaseReturn(e.currentTarget.dataset.id); render(); }
         }));
