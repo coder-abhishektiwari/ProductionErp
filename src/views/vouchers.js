@@ -26,14 +26,14 @@ export default function VouchersView() {
     };
 
     const renderPayment = (el) => {
-        const suppliers = db.data.suppliers;
+        const payToAccounts = db.data.accounts.filter(a => a.accountKind !== 'cash' && a.accountKind !== 'bank' && a.accountKind !== 'upi');
         const payAccounts = db.data.accounts.filter(a => a.accountKind === 'cash' || a.accountKind === 'bank' || a.accountKind === 'upi');
         el.innerHTML = `
           <div class="card">
-            <div class="section-header"><div class="section-title">Payment to Supplier</div></div>
+            <div class="section-header"><div class="section-title">Payment</div></div>
             <div class="grid-3 mb-4">
-              <div class="form-group"><label class="form-label">Supplier</label>
-                <select class="form-control" id="pay-party">${suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select></div>
+              <div class="form-group"><label class="form-label">Paid To (Account/Supplier)</label>
+                <select class="form-control" id="pay-party">${payToAccounts.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select></div>
               <div class="form-group"><label class="form-label">Amount (₹)</label>
                 <input type="number" class="form-control" id="pay-amount" placeholder="0.00"></div>
               <div class="form-group"><label class="form-label">Date</label>
@@ -56,7 +56,7 @@ export default function VouchersView() {
             const amount = Number(el.querySelector('#pay-amount').value);
             if (!amount || amount <= 0) { alert('Enter valid amount'); return; }
             db.addPaymentVoucher({
-                partyId: el.querySelector('#pay-party').value,
+                targetAccountId: el.querySelector('#pay-party').value,
                 amount,
                 date: el.querySelector('#pay-date').value,
                 accountId: el.querySelector('#pay-account').value,
@@ -69,14 +69,14 @@ export default function VouchersView() {
     };
 
     const renderReceipt = (el) => {
-        const customers = db.data.customers;
+        const recFromAccounts = db.data.accounts.filter(a => a.accountKind !== 'cash' && a.accountKind !== 'bank' && a.accountKind !== 'upi');
         const payAccounts = db.data.accounts.filter(a => a.accountKind === 'cash' || a.accountKind === 'bank' || a.accountKind === 'upi');
         el.innerHTML = `
           <div class="card">
-            <div class="section-header"><div class="section-title">Receipt from Customer</div></div>
+            <div class="section-header"><div class="section-title">Receipt</div></div>
             <div class="grid-3 mb-4">
-              <div class="form-group"><label class="form-label">Customer</label>
-                <select class="form-control" id="rec-party">${customers.map(cu => `<option value="${cu.id}">${cu.name}</option>`).join('')}</select></div>
+              <div class="form-group"><label class="form-label">Received From (Account/Customer)</label>
+                <select class="form-control" id="rec-party">${recFromAccounts.map(cu => `<option value="${cu.id}">${cu.name}</option>`).join('')}</select></div>
               <div class="form-group"><label class="form-label">Amount (₹)</label>
                 <input type="number" class="form-control" id="rec-amount" placeholder="0.00"></div>
               <div class="form-group"><label class="form-label">Date</label>
@@ -99,7 +99,7 @@ export default function VouchersView() {
             const amount = Number(el.querySelector('#rec-amount').value);
             if (!amount || amount <= 0) { alert('Enter valid amount'); return; }
             db.addReceiptVoucher({
-                partyId: el.querySelector('#rec-party').value,
+                targetAccountId: el.querySelector('#rec-party').value,
                 amount,
                 date: el.querySelector('#rec-date').value,
                 accountId: el.querySelector('#rec-account').value,

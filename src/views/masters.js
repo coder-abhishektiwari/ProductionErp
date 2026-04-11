@@ -211,9 +211,44 @@ export default function MastersView() {
                 <div class="form-group"><label class="form-label">GSTIN</label><input class="form-control" id="cu-gstin" value="${ed.gstin || ''}" placeholder="27AABCM1234F1Z5"></div>
                 <div class="form-group"><label class="form-label">State</label>
                   <select class="form-control" id="cu-state">
-                    <option value="27" ${ed.stateCode==='27'?'selected':''}>Maharashtra (27)</option>
+                    <option value="">-- Select State --</option>
+                    <option value="35" ${ed.stateCode==='35'?'selected':''}>Andaman and Nicobar Islands (35)</option>
+                    <option value="28" ${ed.stateCode==='28'?'selected':''}>Andhra Pradesh (28)</option>
+                    <option value="37" ${ed.stateCode==='37'?'selected':''}>Andhra Pradesh (New) (37)</option>
+                    <option value="12" ${ed.stateCode==='12'?'selected':''}>Arunachal Pradesh (12)</option>
+                    <option value="18" ${ed.stateCode==='18'?'selected':''}>Assam (18)</option>
+                    <option value="10" ${ed.stateCode==='10'?'selected':''}>Bihar (10)</option>
+                    <option value="04" ${ed.stateCode==='04'?'selected':''}>Chandigarh (04)</option>
+                    <option value="22" ${ed.stateCode==='22'?'selected':''}>Chhattisgarh (22)</option>
+                    <option value="26" ${ed.stateCode==='26'?'selected':''}>Dadra and Nagar Haveli (26)</option>
+                    <option value="25" ${ed.stateCode==='25'?'selected':''}>Daman and Diu (25)</option>
                     <option value="07" ${ed.stateCode==='07'?'selected':''}>Delhi (07)</option>
+                    <option value="30" ${ed.stateCode==='30'?'selected':''}>Goa (30)</option>
+                    <option value="24" ${ed.stateCode==='24'?'selected':''}>Gujarat (24)</option>
+                    <option value="06" ${ed.stateCode==='06'?'selected':''}>Haryana (06)</option>
+                    <option value="02" ${ed.stateCode==='02'?'selected':''}>Himachal Pradesh (02)</option>
+                    <option value="01" ${ed.stateCode==='01'?'selected':''}>Jammu and Kashmir (01)</option>
+                    <option value="20" ${ed.stateCode==='20'?'selected':''}>Jharkhand (20)</option>
+                    <option value="29" ${ed.stateCode==='29'?'selected':''}>Karnataka (29)</option>
+                    <option value="32" ${ed.stateCode==='32'?'selected':''}>Kerala (32)</option>
+                    <option value="31" ${ed.stateCode==='31'?'selected':''}>Lakshadweep (31)</option>
+                    <option value="23" ${ed.stateCode==='23'?'selected':''}>Madhya Pradesh (23)</option>
+                    <option value="27" ${ed.stateCode==='27'?'selected':''}>Maharashtra (27)</option>
+                    <option value="14" ${ed.stateCode==='14'?'selected':''}>Manipur (14)</option>
+                    <option value="17" ${ed.stateCode==='17'?'selected':''}>Meghalaya (17)</option>
+                    <option value="15" ${ed.stateCode==='15'?'selected':''}>Mizoram (15)</option>
+                    <option value="13" ${ed.stateCode==='13'?'selected':''}>Nagaland (13)</option>
+                    <option value="21" ${ed.stateCode==='21'?'selected':''}>Odisha (21)</option>
+                    <option value="34" ${ed.stateCode==='34'?'selected':''}>Puducherry (34)</option>
+                    <option value="03" ${ed.stateCode==='03'?'selected':''}>Punjab (03)</option>
+                    <option value="08" ${ed.stateCode==='08'?'selected':''}>Rajasthan (08)</option>
+                    <option value="11" ${ed.stateCode==='11'?'selected':''}>Sikkim (11)</option>
+                    <option value="33" ${ed.stateCode==='33'?'selected':''}>Tamil Nadu (33)</option>
+                    <option value="36" ${ed.stateCode==='36'?'selected':''}>Telangana (36)</option>
+                    <option value="16" ${ed.stateCode==='16'?'selected':''}>Tripura (16)</option>
                     <option value="09" ${ed.stateCode==='09'?'selected':''}>Uttar Pradesh (09)</option>
+                    <option value="05" ${ed.stateCode==='05'?'selected':''}>Uttarakhand (05)</option>
+                    <option value="19" ${ed.stateCode==='19'?'selected':''}>West Bengal (19)</option>
                   </select>
                 </div>
               </div>
@@ -313,9 +348,44 @@ export default function MastersView() {
                 <div class="form-group"><label class="form-label">GSTIN</label><input class="form-control" id="su-gstin" value="${ed.gstin || ''}" placeholder="07AABCN1234H1Z9"></div>
                 <div class="form-group"><label class="form-label">State</label>
                   <select class="form-control" id="su-state">
-                    <option value="27" ${ed.stateCode==='27'?'selected':''}>Maharashtra (27)</option>
+                    <option value="">-- Select State --</option>
+                    <option value="35" ${ed.stateCode==='35'?'selected':''}>Andaman and Nicobar Islands (35)</option>
+                    <option value="28" ${ed.stateCode==='28'?'selected':''}>Andhra Pradesh (28)</option>
+                    <option value="37" ${ed.stateCode==='37'?'selected':''}>Andhra Pradesh (New) (37)</option>
+                    <option value="12" ${ed.stateCode==='12'?'selected':''}>Arunachal Pradesh (12)</option>
+                    <option value="18" ${ed.stateCode==='18'?'selected':''}>Assam (18)</option>
+                    <option value="10" ${ed.stateCode==='10'?'selected':''}>Bihar (10)</option>
+                    <option value="04" ${ed.stateCode==='04'?'selected':''}>Chandigarh (04)</option>
+                    <option value="22" ${ed.stateCode==='22'?'selected':''}>Chhattisgarh (22)</option>
+                    <option value="26" ${ed.stateCode==='26'?'selected':''}>Dadra and Nagar Haveli (26)</option>
+                    <option value="25" ${ed.stateCode==='25'?'selected':''}>Daman and Diu (25)</option>
                     <option value="07" ${ed.stateCode==='07'?'selected':''}>Delhi (07)</option>
+                    <option value="30" ${ed.stateCode==='30'?'selected':''}>Goa (30)</option>
+                    <option value="24" ${ed.stateCode==='24'?'selected':''}>Gujarat (24)</option>
+                    <option value="06" ${ed.stateCode==='06'?'selected':''}>Haryana (06)</option>
+                    <option value="02" ${ed.stateCode==='02'?'selected':''}>Himachal Pradesh (02)</option>
+                    <option value="01" ${ed.stateCode==='01'?'selected':''}>Jammu and Kashmir (01)</option>
+                    <option value="20" ${ed.stateCode==='20'?'selected':''}>Jharkhand (20)</option>
+                    <option value="29" ${ed.stateCode==='29'?'selected':''}>Karnataka (29)</option>
+                    <option value="32" ${ed.stateCode==='32'?'selected':''}>Kerala (32)</option>
+                    <option value="31" ${ed.stateCode==='31'?'selected':''}>Lakshadweep (31)</option>
+                    <option value="23" ${ed.stateCode==='23'?'selected':''}>Madhya Pradesh (23)</option>
+                    <option value="27" ${ed.stateCode==='27'?'selected':''}>Maharashtra (27)</option>
+                    <option value="14" ${ed.stateCode==='14'?'selected':''}>Manipur (14)</option>
+                    <option value="17" ${ed.stateCode==='17'?'selected':''}>Meghalaya (17)</option>
+                    <option value="15" ${ed.stateCode==='15'?'selected':''}>Mizoram (15)</option>
+                    <option value="13" ${ed.stateCode==='13'?'selected':''}>Nagaland (13)</option>
+                    <option value="21" ${ed.stateCode==='21'?'selected':''}>Odisha (21)</option>
+                    <option value="34" ${ed.stateCode==='34'?'selected':''}>Puducherry (34)</option>
+                    <option value="03" ${ed.stateCode==='03'?'selected':''}>Punjab (03)</option>
+                    <option value="08" ${ed.stateCode==='08'?'selected':''}>Rajasthan (08)</option>
+                    <option value="11" ${ed.stateCode==='11'?'selected':''}>Sikkim (11)</option>
+                    <option value="33" ${ed.stateCode==='33'?'selected':''}>Tamil Nadu (33)</option>
+                    <option value="36" ${ed.stateCode==='36'?'selected':''}>Telangana (36)</option>
+                    <option value="16" ${ed.stateCode==='16'?'selected':''}>Tripura (16)</option>
                     <option value="09" ${ed.stateCode==='09'?'selected':''}>Uttar Pradesh (09)</option>
+                    <option value="05" ${ed.stateCode==='05'?'selected':''}>Uttarakhand (05)</option>
+                    <option value="19" ${ed.stateCode==='19'?'selected':''}>West Bengal (19)</option>
                   </select>
                 </div>
               </div>
@@ -426,7 +496,7 @@ export default function MastersView() {
                   <select class="form-control" id="acc-kind">
                     <option value="other" ${ed.accountKind === 'other' ? 'selected' : ''}>General Ledger</option>
                     <option value="bank" ${ed.accountKind === 'bank' || ed.group === 'Bank Accounts' ? 'selected' : ''}>Bank Account</option>
-                    <option value="cash" ${ed.accountKind === 'cash' || ed.group === 'Cash-in-hand' ? 'selected' : ''}>Cash Account</option>
+                    <option value="cash" ${ed.accountKind === 'cash' || ed.group === 'Cash-in-Hand' ? 'selected' : ''}>Cash Account</option>
                     <option value="upi" ${ed.accountKind === 'upi' ? 'selected' : ''}>UPI / Wallet</option>
                   </select>
                 </div>
@@ -489,7 +559,7 @@ export default function MastersView() {
         if (isBank(e.target.value)) {
             bankFields.style.display = 'block';
             kindSel.value = 'bank';
-        } else if (e.target.value === 'Cash-in-hand') {
+        } else if (e.target.value === 'Cash-in-Hand') {
             bankFields.style.display = 'none';
             kindSel.value = 'cash';
         } else {

@@ -147,7 +147,7 @@ const initialState = {
 
     { id: 'g_loans_ast', name: 'Loans & Advances (Asset)', type: 'Asset', parent: 'g_current_ast' },
 
-    { id: 'g_duties', name: 'Duties & Taxes', type: 'Neutral', parent: null },
+    { id: 'g_duties', name: 'Duties & Taxes', type: 'Liability', parent: null },
 
     { id: 'g_stock', name: 'Stock-in-Hand', type: 'Asset', parent: 'g_current_ast' },
   ],
@@ -344,12 +344,42 @@ class Database {
     keys.forEach(k => this._dirtyKeys.add(k));
   }
 
+  // FIX 2: Pass dirty keys to sync engine so only changed tables upload
   saveData() {
     // Persist to IndexedDB immediately (offline-first)
     IDB.set('state', this.data).catch(e => console.error('IDB write failed:', e));
-    // Notify sync engine that data has changed
-    SyncEngine.markPendingChanges();
+    // Notify sync engine with the specific dirty keys
+    const dirty = [...this._dirtyKeys];
+    this._dirtyKeys.clear();
+    SyncEngine.markPendingChanges(dirty);
     this.notify();
+  }
+
+  // FIX 3: Safe remote delete — queued for offline retry
+  _remoteDelete(table, id) {
+    // Map db.data key names to Supabase table names
+    const TABLE_NAME_MAP = {
+      chemicals: 'erp_chemicals', products: 'erp_products',
+      sheetTypes: 'erp_sheet_types', customers: 'erp_customers',
+      suppliers: 'erp_suppliers', accounts: 'erp_accounts',
+      accountGroups: 'erp_account_groups', vouchers: 'erp_vouchers',
+      voucherDetails: 'erp_voucher_details',
+      inventoryTransactions: 'erp_inventory_transactions',
+      productionBatches: 'erp_production_batches',
+      customerOrders: 'erp_customer_orders', cheques: 'erp_cheques',
+      purchaseInvoices: 'erp_purchase_invoices',
+      salesInvoices: 'erp_sales_invoices',
+      scrapSaleInvoices: 'erp_scrap_sale_invoices',
+      sheetSaleInvoices: 'erp_sheet_sale_invoices',
+      purchaseReturns: 'erp_purchase_returns',
+      salesReturns: 'erp_sales_returns',
+      deliveryChallans: 'erp_delivery_challans',
+      expenses: 'erp_expenses', loans: 'erp_loans',
+      companyUsers: 'erp_company_users',
+    };
+    const supabaseTable = TABLE_NAME_MAP[table] || `erp_${table}`;
+    // Use queued delete — safe offline, retried on reconnect
+    SyncEngine.enqueueRemoteDelete(supabaseTable, id);
   }
 
   subscribe(listener) {
@@ -367,16 +397,25 @@ class Database {
   }
 
   // ── Merge remote state (for cloud download) ─────────────
-  mergeRemoteState(remoteState) {
+  mergeRemoteState(remoteState, silent = false) {
     if (!remoteState) return;
     const merged = this._migrate(remoteState);
     this.data = merged;
     IDB.set('state', this.data).catch(e => console.error('IDB merge write failed:', e));
     this.notify();
-    // Refresh current view
-    window.dispatchEvent(new CustomEvent('view-activated', {
-      detail: { route: window.location.hash.substring(1) }
-    }));
+    
+    if (!silent) {
+        // Manual Download: Trigger hard refresh to ensure everything is perfect
+        window.dispatchEvent(new CustomEvent('view-activated', {
+          detail: { route: window.location.hash.substring(1) }
+        }));
+    } else {
+        // Background Auto-Download: Lightweight notification
+        // Inform views that data has changed without interrupting current work
+        window.dispatchEvent(new CustomEvent('view-data-updated', {
+          detail: { tables: Object.keys(remoteState) }
+        }));
+    }
   }
 
   // ── FIX 7: Sequence-based numbering (delete-safe) ─────
@@ -385,15 +424,27 @@ class Database {
     this._markDirty('sequences');
     return `${prefix}-${n.toString().padStart(pad, '0')}`;
   }
+  _peekSeq(key, prefix, pad = 5) {
+    const n = this.data.sequences[key] || 1;
+    return `${prefix}-${n.toString().padStart(pad, '0')}`;
+  }
 
   nextVoucherNo() { return this._nextSeq('voucher', 'VCH'); }
+  peekVoucherNo() { return this._peekSeq('voucher', 'VCH'); }
   nextInvoiceNo() { return this._nextSeq('salesInvoice', 'INV'); }
+  peekInvoiceNo() { return this._peekSeq('salesInvoice', 'INV'); }
   nextPurchaseInvoiceNo() { return this._nextSeq('purchaseInvoice', 'PUR'); }
+  peekPurchaseInvoiceNo() { return this._peekSeq('purchaseInvoice', 'PUR'); }
   nextDebitNoteNo() { return this._nextSeq('debitNote', 'DN'); }
+  peekDebitNoteNo() { return this._peekSeq('debitNote', 'DN'); }
   nextCreditNoteNo() { return this._nextSeq('creditNote', 'CN'); }
+  peekCreditNoteNo() { return this._peekSeq('creditNote', 'CN'); }
   nextScrapInvoiceNo() { return this._nextSeq('scrapInvoice', 'SCR'); }
+  peekScrapInvoiceNo() { return this._peekSeq('scrapInvoice', 'SCR'); }
   nextSheetInvoiceNo() { return this._nextSeq('sheetInvoice', 'SHT'); }
+  peekSheetInvoiceNo() { return this._peekSeq('sheetInvoice', 'SHT'); }
   nextDeliveryChallanNo() { return this._nextSeq('deliveryChallan', 'CHL'); }
+  peekDeliveryChallanNo() { return this._peekSeq('deliveryChallan', 'CHL'); }
 
   // ── FIX 6: Stock validation helper ────────────────────
   /**
@@ -729,7 +780,9 @@ class Database {
       detailsData.push({ accountId: invoiceData.accountId, drAmount: 0, crAmount: grandTotal });
     }
 
-    const invoiceNo = invoiceData.invoiceNo || this.nextPurchaseInvoiceNo();
+    let invoiceNo = invoiceData.invoiceNo;
+    if (!invoiceNo || invoiceNo === this.peekPurchaseInvoiceNo()) invoiceNo = this.nextPurchaseInvoiceNo();
+    
     const voucher = this.addVoucher({
       date: invoiceData.date,
       type: 'Purchase',
@@ -785,7 +838,9 @@ class Database {
     detailsData.push({ accountId: 'acc_sales', drAmount: 0, crAmount: subtotal });
     detailsData.push(...this._gstDetailEntries(isInterState, { cgst, sgst, igst }, 'output'));
 
-    const invoiceNo = invoiceData.invoiceNo || this.nextInvoiceNo();
+    let invoiceNo = invoiceData.invoiceNo;
+    if (!invoiceNo || invoiceNo === this.peekInvoiceNo()) invoiceNo = this.nextInvoiceNo();
+
     const voucher = this.addVoucher({
       date: invoiceData.date,
       type: 'Sales',
@@ -860,7 +915,9 @@ class Database {
     detailsData.push({ accountId: 'acc_scrap_income', drAmount: 0, crAmount: subtotal });
     detailsData.push(...this._gstDetailEntries(isInterState, { cgst, sgst, igst }, 'output'));
 
-    const invoiceNo = invoiceData.invoiceNo || this.nextScrapInvoiceNo();
+    let invoiceNo = invoiceData.invoiceNo;
+    if (!invoiceNo || invoiceNo === this.peekScrapInvoiceNo()) invoiceNo = this.nextScrapInvoiceNo();
+
     const voucher = this.addVoucher({
       date: invoiceData.date,
       type: 'Scrap Sale',
@@ -930,7 +987,9 @@ class Database {
     detailsData.push({ accountId: 'acc_sheet_sale_income', drAmount: 0, crAmount: subtotal });
     detailsData.push(...this._gstDetailEntries(isInterState, { cgst, sgst, igst }, 'output'));
 
-    const invoiceNo = invoiceData.invoiceNo || this.nextSheetInvoiceNo();
+    let invoiceNo = invoiceData.invoiceNo;
+    if (!invoiceNo || invoiceNo === this.peekSheetInvoiceNo()) invoiceNo = this.nextSheetInvoiceNo();
+
     const voucher = this.addVoucher({
       date: invoiceData.date,
       type: 'Sheet Sale',
@@ -1109,22 +1168,33 @@ class Database {
 
   // ── Payment / Receipt Voucher ─────────────────────────
   addPaymentVoucher(data) {
-    const supAcc = this._getOrCreatePartyAccount(data.partyId, 'supplier');
+    let drAccount = data.targetAccountId || data.partyId;
+    let partyRef = null;
+    let partyType = null;
+    if (drAccount && drAccount.startsWith('party_')) {
+       partyRef = drAccount.replace('party_', '');
+       partyType = 'supplier';
+    } else if (data.partyId && !data.targetAccountId) {
+       drAccount = this._getOrCreatePartyAccount(data.partyId, 'supplier').id;
+       partyRef = data.partyId;
+       partyType = 'supplier';
+    }
+
     const detailsData = [
-      { accountId: supAcc.id, partyId: data.partyId, drAmount: data.amount, crAmount: 0 },
+      { accountId: drAccount, partyId: partyRef, drAmount: data.amount, crAmount: 0 },
       { accountId: data.accountId, drAmount: 0, crAmount: data.amount },
     ];
 
     const voucher = this.addVoucher({
       date: data.date,
       type: 'Payment',
-      narration: data.narration || 'Payment to supplier',
+      narration: data.narration || 'Payment',
     }, detailsData);
 
     if (data.chequeNo) {
       this.data.cheques.push({
         id: generateId(), type: 'issued',
-        partyId: data.partyId, partyType: 'supplier',
+        partyId: partyRef || drAccount, partyType: partyType || 'other',
         chequeNo: data.chequeNo, date: data.date, bankName: data.bankName || '',
         amount: data.amount, status: 'pending', voucherId: voucher.id,
       });
@@ -1135,22 +1205,33 @@ class Database {
   }
 
   addReceiptVoucher(data) {
-    const custAcc = this._getOrCreatePartyAccount(data.partyId, 'customer');
+    let crAccount = data.targetAccountId || data.partyId;
+    let partyRef = null;
+    let partyType = null;
+    if (crAccount && crAccount.startsWith('party_')) {
+       partyRef = crAccount.replace('party_', '');
+       partyType = 'customer';
+    } else if (data.partyId && !data.targetAccountId) {
+       crAccount = this._getOrCreatePartyAccount(data.partyId, 'customer').id;
+       partyRef = data.partyId;
+       partyType = 'customer';
+    }
+
     const detailsData = [
       { accountId: data.accountId, drAmount: data.amount, crAmount: 0 },
-      { accountId: custAcc.id, partyId: data.partyId, drAmount: 0, crAmount: data.amount },
+      { accountId: crAccount, partyId: partyRef, drAmount: 0, crAmount: data.amount },
     ];
 
     const voucher = this.addVoucher({
       date: data.date,
       type: 'Receipt',
-      narration: data.narration || 'Receipt from customer',
+      narration: data.narration || 'Receipt',
     }, detailsData);
 
     if (data.chequeNo) {
       this.data.cheques.push({
         id: generateId(), type: 'received',
-        partyId: data.partyId, partyType: 'customer',
+        partyId: partyRef || crAccount, partyType: partyType || 'other',
         chequeNo: data.chequeNo, date: data.date, bankName: data.bankName || '',
         amount: data.amount, status: 'pending', voucherId: voucher.id,
       });
@@ -1771,7 +1852,8 @@ class Database {
   // ── Delivery Challan ──────────────────────────────────
   addDeliveryChallan(data) {
     const voucherId = generateId();
-    const challanNo = this.nextDeliveryChallanNo();
+    let challanNo = data.challanNo;
+    if (!challanNo || challanNo === this.peekDeliveryChallanNo()) challanNo = this.nextDeliveryChallanNo();
 
     this.data.vouchers.push({
       id: voucherId, date: data.date, type: 'Delivery Challan',

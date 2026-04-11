@@ -1,17 +1,11 @@
 // ============================================================
 // SUPABASE SYNC ENGINE — Per-Table Sync (Full Relational)
 // ============================================================
-// ARCHITECTURE:
-//   Each db.data key has its OWN supabase table:
-//     db.data.vouchers     → erp_vouchers
-//     db.data.accounts     → erp_accounts
-//     db.data.companyInfo  → erp_company_info
-//     etc.
-//
-//   Array data: stored as (id, company_id, data JSONB)
-//   Object data: stored as (company_id, data JSONB)
-//
-//   Multi-owner: company_owners junction table
+// FIX APPLIED:
+//   1. UPSERT instead of DELETE+INSERT → prevents data wipe on network cut
+//   2. Dirty-key tracking → only changed tables are uploaded (not all 28)
+//   3. Offline delete queue → retried automatically on reconnect
+//   4. Password hashed via SHA-256 (SubtleCrypto) before DB storage
 // ============================================================
 
 import { getSupabase, isSupabaseConfigured } from './supabase-config.js';
@@ -50,38 +44,92 @@ const TABLE_MAP = {
 
 // ── Sync State ─────────────────────────────────────────────
 const syncState = {
-  lastSynced: null,
+  lastUploaded: null,
+  lastDownloaded: null,
   isSyncing: false,
   lastError: null,
   isOnline: navigator.onLine,
   autoSyncEnabled: true,
   autoSyncInterval: 60000,
   pendingChanges: false,
-  progress: '', // 'Uploading vouchers...'
+  dirtyKeys: new Set(),
+  progress: '',
   _autoSyncTimer: null,
   _listeners: [],
 };
 
+// ── FIX 3: Offline Delete Queue (persisted in localStorage) ─
+const OFFLINE_QUEUE_KEY = '_deleteQueue';
+
+function _loadDeleteQueue() {
+  try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function _saveDeleteQueue(q) {
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+}
+
+function _enqueueDelete(table, id) {
+  const q = _loadDeleteQueue();
+  // Avoid duplicates
+  if (!q.some(item => item.table === table && item.id === id)) {
+    q.push({ table, id, company_id: localStorage.getItem('company_id') });
+  }
+  _saveDeleteQueue(q);
+}
+
+async function _flushDeleteQueue(supabase) {
+  const q = _loadDeleteQueue();
+  if (q.length === 0) return;
+  const remaining = [];
+  for (const item of q) {
+    try {
+      const { error } = await supabase.from(item.table)
+        .delete().eq('id', item.id).eq('company_id', item.company_id);
+      if (error) remaining.push(item); // keep for retry
+    } catch {
+      remaining.push(item);
+    }
+  }
+  _saveDeleteQueue(remaining);
+  if (remaining.length < q.length) {
+    console.log(`🗑️ Flushed ${q.length - remaining.length} queued deletes.`);
+  }
+}
+
+// ── Prefs ──────────────────────────────────────────────────
 function _loadPrefs() {
   try {
     const prefs = JSON.parse(localStorage.getItem('_syncPrefs') || '{}');
     if (typeof prefs.autoSyncEnabled === 'boolean') syncState.autoSyncEnabled = prefs.autoSyncEnabled;
     if (prefs.autoSyncInterval) syncState.autoSyncInterval = Number(prefs.autoSyncInterval);
-    if (prefs.lastSynced) syncState.lastSynced = new Date(prefs.lastSynced);
-  } catch (e) { /* ignore */ }
+    if (prefs.lastUploaded) syncState.lastUploaded = new Date(prefs.lastUploaded);
+    if (prefs.lastDownloaded) syncState.lastDownloaded = new Date(prefs.lastDownloaded);
+    // Legacy support
+    if (prefs.lastSynced && !prefs.lastDownloaded) syncState.lastDownloaded = new Date(prefs.lastSynced);
+  } catch { /* ignore */ }
 }
 
 function _savePrefs() {
   localStorage.setItem('_syncPrefs', JSON.stringify({
     autoSyncEnabled: syncState.autoSyncEnabled,
     autoSyncInterval: syncState.autoSyncInterval,
-    lastSynced: syncState.lastSynced?.toISOString() || null,
+    lastUploaded: syncState.lastUploaded?.toISOString() || null,
+    lastDownloaded: syncState.lastDownloaded?.toISOString() || null,
   }));
 }
 
-function _notify() {
+let _lastNotify = 0;
+function _notify(force = false) {
+  const now = Date.now();
+  // Throttle during high-frequency updates (like progress bars)
+  // but allow immediate for start/stop/error
+  if (!force && (now - _lastNotify < 100)) return; 
+  _lastNotify = now;
+  
   syncState._listeners.forEach(fn => {
-    try { fn({ ...syncState }); } catch (e) { /* ignore */ }
+    try { fn({ ...syncState, dirtyKeys: [...syncState.dirtyKeys] }); } catch { /* ignore */ }
   });
 }
 
@@ -100,7 +148,14 @@ function _friendlyError(e) {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => { syncState.isOnline = true; _notify(); });
+  window.addEventListener('online', () => {
+    syncState.isOnline = true;
+    _notify();
+    // Auto-flush delete queue when back online
+    if (isSupabaseConfigured()) {
+      _flushDeleteQueue(getSupabase()).catch(console.warn);
+    }
+  });
   window.addEventListener('offline', () => { syncState.isOnline = false; _notify(); });
 }
 
@@ -109,10 +164,8 @@ async function _ensureCompanyExists(supabase, companyId) {
   try {
     const name = localStorage.getItem('company_name') || companyId;
     const username = localStorage.getItem('master_username') || 'admin';
-    // Upsert company
     await supabase.from('system_companies')
       .upsert({ id: companyId, name }, { onConflict: 'id' });
-    // Upsert owner
     await supabase.from('company_owners')
       .upsert({ company_id: companyId, username, role: 'OWNER' },
         { onConflict: 'company_id,username' });
@@ -121,10 +174,24 @@ async function _ensureCompanyExists(supabase, companyId) {
   }
 }
 
+// ── FIX 4: SHA-256 password hash ─────────────────────────
+async function _hashPassword(plaintext) {
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(plaintext);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    // Fallback: store as-is if SubtleCrypto unavailable (shouldn't happen in modern browsers)
+    return plaintext;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════
-// UPLOAD: IndexedDB → Supabase (per-table)
+// FIX 1+2: UPLOAD using UPSERT (safe) + dirty keys only
 // ═══════════════════════════════════════════════════════════
-async function uploadToCloud(db) {
+async function uploadToCloud(db, keysToSync = null) {
   if (!isSupabaseConfigured()) return { success: false, error: 'Supabase not configured' };
   if (syncState.isSyncing) return { success: false, error: 'Sync in progress' };
   if (!syncState.isOnline) return { success: false, error: 'Offline' };
@@ -141,56 +208,65 @@ async function uploadToCloud(db) {
   try {
     await _ensureCompanyExists(supabase, companyId);
 
-    const keys = Object.keys(TABLE_MAP);
-    let uploaded = 0;
+    // FIX 3: Flush any queued deletes first
+    await _flushDeleteQueue(supabase);
 
-    for (const key of keys) {
-      const { table, type } = TABLE_MAP[key];
+    // FIX 2: Only sync dirty keys (or all if forced)
+    const keysToProcess = keysToSync
+      ? keysToSync
+      : (syncState.dirtyKeys.size > 0 ? [...syncState.dirtyKeys] : Object.keys(TABLE_MAP));
+
+    let uploaded = 0;
+    const total = keysToProcess.length;
+
+    for (const key of keysToProcess) {
+      const mapping = TABLE_MAP[key];
+      if (!mapping) continue;
+      const { table, type } = mapping;
       const localData = db.data[key];
       if (localData === undefined) continue;
 
-      syncState.progress = `Uploading ${key}... (${++uploaded}/${keys.length})`;
+      syncState.progress = `Uploading ${key}... (${++uploaded}/${total})`;
       _notify();
 
       if (type === 'object') {
-        // Single-object: upsert one row
+        // FIX 1: UPSERT for single-object tables (safe, no data loss)
         const { error } = await supabase.from(table)
           .upsert({ company_id: companyId, data: localData }, { onConflict: 'company_id' });
         if (error) throw new Error(`${key}: ${_friendlyError(error)}`);
       }
       else if (type === 'array') {
-        // Array: delete old + bulk insert
         if (!Array.isArray(localData)) continue;
 
-        // Step 1: Delete all existing rows for this company
-        const { error: delErr } = await supabase.from(table)
-          .delete().eq('company_id', companyId);
-        if (delErr) throw new Error(`${key} delete: ${_friendlyError(delErr)}`);
-
-        // Step 2: Bulk insert in batches of 500
-        if (localData.length > 0) {
-          const BATCH = 500;
-          for (let i = 0; i < localData.length; i += BATCH) {
-            const batch = localData.slice(i, i + BATCH).map(record => ({
-              id: record.id || `auto_${i}_${Math.random().toString(36).substr(2, 6)}`,
-              company_id: companyId,
-              data: record,
-            }));
-            const { error: insErr } = await supabase.from(table).insert(batch);
-            if (insErr) throw new Error(`${key} insert: ${_friendlyError(insErr)}`);
-          }
+        // FIX 1: UPSERT rows instead of DELETE+INSERT
+        // This is safe even if network cuts mid-way — partial data is never lost
+        const BATCH = 500;
+        for (let i = 0; i < localData.length; i += BATCH) {
+          const batch = localData.slice(i, i + BATCH).map(record => ({
+            id: record.id || `auto_${i}_${Math.random().toString(36).substr(2, 6)}`,
+            company_id: companyId,
+            data: record,
+          }));
+          const { error: upsErr } = await supabase.from(table)
+            .upsert(batch, { onConflict: 'id,company_id' });
+          if (upsErr) throw new Error(`${key} upsert: ${_friendlyError(upsErr)}`);
         }
+
+        // BATCH UPSERT COMPLETED
+        // Deleted items are handled safely via the offline delete queue (_flushDeleteQueue)
       }
     }
 
-    syncState.lastSynced = new Date();
-    syncState.pendingChanges = false;
+    // Clear only the keys we just synced
+    keysToProcess.forEach(k => syncState.dirtyKeys.delete(k));
+    syncState.lastUploaded = new Date();
+    syncState.pendingChanges = syncState.dirtyKeys.size > 0;
     syncState.lastError = null;
     syncState.progress = '';
     _savePrefs();
     _notify();
     console.log(`☁️ Upload complete! ${uploaded} tables synced.`);
-    return { success: true, tables: uploaded };
+    return { success: true, count: uploaded };
   } catch (e) {
     console.error('☁️ Upload failed:', e.message);
     syncState.lastError = _friendlyError(e);
@@ -206,7 +282,7 @@ async function uploadToCloud(db) {
 // ═══════════════════════════════════════════════════════════
 // DOWNLOAD: Supabase → IndexedDB (per-table)
 // ═══════════════════════════════════════════════════════════
-async function downloadFromCloud(db) {
+async function downloadFromCloud(db, silent = false) {
   if (!isSupabaseConfigured()) return { success: false, error: 'Supabase not configured' };
   if (syncState.isSyncing) return { success: false, error: 'Sync in progress' };
   if (!syncState.isOnline) return { success: false, error: 'Offline' };
@@ -217,9 +293,10 @@ async function downloadFromCloud(db) {
 
   syncState.isSyncing = true;
   syncState.lastError = null;
-  syncState.progress = 'Starting download...';
+  if (!silent) syncState.progress = 'Starting download...';
   _notify();
 
+  console.log(`☁️ Download started (silent: ${silent})`);
   try {
     const remoteState = {};
     const keys = Object.keys(TABLE_MAP);
@@ -228,9 +305,12 @@ async function downloadFromCloud(db) {
 
     for (const key of keys) {
       const { table, type } = TABLE_MAP[key];
-
-      syncState.progress = `Downloading ${key}... (${++downloaded}/${keys.length})`;
-      _notify();
+      if (!silent) {
+        syncState.progress = `Downloading ${key}... (${++downloaded}/${keys.length})`;
+        _notify();
+      } else {
+        downloaded++;
+      }
 
       if (type === 'object') {
         const { data, error } = await supabase.from(table)
@@ -240,8 +320,7 @@ async function downloadFromCloud(db) {
           remoteState[key] = data.data;
           hasData = true;
         }
-      }
-      else if (type === 'array') {
+      } else if (type === 'array') {
         const { data, error } = await supabase.from(table)
           .select('data').eq('company_id', companyId);
         if (error) throw new Error(`${key}: ${_friendlyError(error)}`);
@@ -252,23 +331,25 @@ async function downloadFromCloud(db) {
       }
     }
 
-    if (!hasData) {
-      syncState.lastSynced = new Date();
+    if (!hasData && !silent) {
+      syncState.lastDownloaded = new Date();
       syncState.progress = '';
       _savePrefs();
       _notify();
       return { success: true, message: 'No cloud data found. Upload first!' };
     }
 
-    // Merge into local db
-    db.mergeRemoteState(remoteState);
-    syncState.lastSynced = new Date();
+    // Mark sync completed BEFORE alerting the UI
+    syncState.lastDownloaded = new Date();
+    syncState.dirtyKeys.clear();
     syncState.pendingChanges = false;
     syncState.lastError = null;
     syncState.progress = '';
     _savePrefs();
     _notify();
+
     console.log(`☁️ Download complete! ${downloaded} tables synced.`);
+    db.mergeRemoteState(remoteState, silent);
     return { success: true, tables: downloaded };
   } catch (e) {
     console.error('☁️ Download failed:', e.message);
@@ -291,10 +372,22 @@ function startAutoSync(db) {
   if (!syncState.autoSyncEnabled) return;
   syncState._autoSyncTimer = setInterval(async () => {
     if (!syncState.isOnline || syncState.isSyncing) return;
-    if (!isSupabaseConfigured() || !localStorage.getItem('company_id')) return;
+    const cid = localStorage.getItem('company_id');
+    if (!isSupabaseConfigured() || !cid) return;
+
+    // 1. Always attempt pending uploads
     if (syncState.pendingChanges) {
-      console.log('⏱️ Auto-sync: uploading...');
+      console.log('⏱️ Auto-sync: uploading dirty keys:', [...syncState.dirtyKeys]);
       await uploadToCloud(db);
+    } 
+    
+    // 2. Independently check for downloads if it's been more than 2 mins
+    // (Pehle ye uploads ke piche fans jata tha, ab dono independent hain)
+    const now = Date.now();
+    const lastDL = syncState.lastDownloaded ? syncState.lastDownloaded.getTime() : 0;
+    if (now - lastDL > 120000) { 
+      console.log('⏱️ Auto-sync: pulse background download');
+      await downloadFromCloud(db, true); // SILENT
     }
   }, syncState.autoSyncInterval);
   console.log(`⏱️ Auto-sync started (${syncState.autoSyncInterval / 1000}s)`);
@@ -322,9 +415,28 @@ function setAutoSyncInterval(ms, db) {
   _notify();
 }
 
-function markPendingChanges() {
+// FIX 2: markPendingChanges now accepts dirty keys
+function markPendingChanges(keys = []) {
   syncState.pendingChanges = true;
+  keys.forEach(k => syncState.dirtyKeys.add(k));
   _notify();
+}
+
+// FIX 3: Public enqueue for offline deletes (called from db.js _remoteDelete)
+function enqueueRemoteDelete(table, id) {
+  if (syncState.isOnline && isSupabaseConfigured()) {
+    // Try immediate delete
+    const companyId = localStorage.getItem('company_id');
+    if (companyId) {
+      getSupabase().from(table).delete().eq('id', id).eq('company_id', companyId)
+        .then(({ error }) => {
+          if (error) _enqueueDelete(table, id); // queue on failure
+        })
+        .catch(() => _enqueueDelete(table, id));
+    }
+  } else {
+    _enqueueDelete(table, id);
+  }
 }
 
 function subscribe(listener) {
@@ -343,6 +455,7 @@ function getStatus() {
     pendingChanges: syncState.pendingChanges,
     progress: syncState.progress,
     configured: isSupabaseConfigured(),
+    dirtyCount: syncState.dirtyKeys.size,
   };
 }
 
@@ -350,19 +463,46 @@ function init(db) {
   _loadPrefs();
   if (syncState.autoSyncEnabled) startAutoSync(db);
   syncState.isOnline = navigator.onLine;
+
+  // Auto-Download on fresh browser
+  if (!syncState.lastDownloaded && isSupabaseConfigured() && localStorage.getItem('company_id')) {
+    console.log("⏱️ Auto-download triggered (fresh device login)");
+    downloadFromCloud(db).catch(e => console.warn("Auto-download failed:", e));
+  }
+
   _notify();
 }
 
 // ═══════════════════════════════════════════════════════════
-// AUTH: MASTER LOGIN
+// AUTH: MASTER LOGIN (with hashed password)
 // ═══════════════════════════════════════════════════════════
 
 async function masterLogin(username, password) {
   if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
   const supabase = getSupabase();
-  const { data, error } = await supabase.from('system_users')
+  const hashed = await _hashPassword(password);
+
+  // Try hashed first (new accounts), fallback to plain (legacy/initial seed)
+  let { data, error } = await supabase.from('system_users')
     .select('id, username, display_name')
-    .eq('username', username).eq('password', password).maybeSingle();
+    .eq('username', username).eq('password', hashed).maybeSingle();
+
+  if (!data && !error) {
+    // Fallback: try plain password for legacy/seed accounts
+    const res = await supabase.from('system_users')
+      .select('id, username, display_name')
+      .eq('username', username).eq('password', password).maybeSingle();
+    data = res.data;
+    error = res.error;
+
+    // If found via plain password, upgrade to hashed automatically
+    if (data) {
+      await supabase.from('system_users')
+        .update({ password: hashed }).eq('username', username);
+      console.log('🔒 Password upgraded to hashed for:', username);
+    }
+  }
+
   if (error) throw new Error(_friendlyError(error));
   if (!data) throw new Error('Invalid username or password');
   return { id: data.id, username: data.username, displayName: data.display_name || data.username };
@@ -374,8 +514,10 @@ async function masterRegister(username, password, displayName) {
   const { data: existing } = await supabase.from('system_users')
     .select('username').eq('username', username).maybeSingle();
   if (existing) throw new Error('Username already taken');
+
+  const hashed = await _hashPassword(password);
   const { error } = await supabase.from('system_users')
-    .insert({ username, password, display_name: displayName || username });
+    .insert({ username, password: hashed, display_name: displayName || username });
   if (error) throw new Error(_friendlyError(error));
   return { success: true };
 }
@@ -387,7 +529,6 @@ async function masterRegister(username, password, displayName) {
 async function fetchCompanies(ownerUsername) {
   if (!isSupabaseConfigured()) return [];
   const supabase = getSupabase();
-  // Fetch companies where this user is an owner
   const { data: ownerships, error: owErr } = await supabase.from('company_owners')
     .select('company_id').eq('username', ownerUsername);
   if (owErr) throw new Error(_friendlyError(owErr));
@@ -408,12 +549,10 @@ async function createCompany(companyName, ownerUsername) {
   const cid = companyName.toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 20)
     + '_' + Date.now().toString(36).toUpperCase();
 
-  // Create company
   const { error: compErr } = await supabase.from('system_companies')
     .insert({ id: cid, name: companyName });
   if (compErr) throw new Error(_friendlyError(compErr));
 
-  // Add owner
   const { error: ownErr } = await supabase.from('company_owners')
     .insert({ company_id: cid, username: ownerUsername, role: 'OWNER' });
   if (ownErr) throw new Error(_friendlyError(ownErr));
@@ -464,7 +603,8 @@ async function fetchAllCompanies() {
 export const SyncEngine = {
   init, uploadToCloud, downloadFromCloud,
   startAutoSync, stopAutoSync, setAutoSync, setAutoSyncInterval,
-  markPendingChanges, subscribe, getStatus,
+  markPendingChanges, enqueueRemoteDelete,
+  subscribe, getStatus,
   masterLogin, masterRegister,
   fetchCompanies, createCompany, fetchAllCompanies,
   addCompanyOwner, removeCompanyOwner, fetchCompanyOwners,

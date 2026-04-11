@@ -64,7 +64,7 @@ export default function SalesView() {
               </div>
               <div class="form-group">
                 <label class="form-label">Invoice No</label>
-                <input class="form-control" id="sal-invno" value="${db.nextInvoiceNo()}" readonly>
+                <input class="form-control" id="sal-invno" value="${db.peekInvoiceNo()}" readonly>
               </div>
               <div class="form-group">
                 <label class="form-label">Date</label>

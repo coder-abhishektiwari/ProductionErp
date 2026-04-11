@@ -104,6 +104,22 @@ window.addEventListener('hashchange', () => {
     navigateTo(route);
 });
 
+window.addEventListener('view-activated', (e) => {
+    // Hard refresh on manual sync completion to ensure everything is perfect
+    window.location.reload();
+});
+
+window.addEventListener('view-data-updated', (e) => {
+    const route = window.location.hash.substring(1) || 'dashboard';
+    // Only auto-refresh if it's a "viewing" page. 
+    // Don't refresh if user is likely typing in an entry form!
+    const safeRoutes = ['dashboard', 'reports', 'masters', 'inventory', 'gst', 'backup', 'company-details', 'accounts'];
+    if (safeRoutes.includes(route)) {
+        delete viewCache[route];
+        navigateTo(route);
+    }
+});
+
 // Reset DB button
 document.getElementById('btn-reset-db')?.addEventListener('click', () => {
     if (confirm('Are you sure you want to reset all data? This will delete all transactions and restore defaults.')) {
