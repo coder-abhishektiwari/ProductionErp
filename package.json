@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 2834",
     "build": "vite build",
-    "start": "vite preview --host 0.0.0.0 --port 2834",
+    "start": "vite preview --host 0.0.0.0 --port 2834 --allowedHosts=https://productionerp.onrender.com",
     "preview": "vite preview",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:e2e": "playwright test"
