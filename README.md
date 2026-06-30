@@ -52,6 +52,7 @@ A comprehensive ERP solution designed specifically for rubber manufacturing busi
 ### Prerequisites
 - Node.js (v16 or higher)
 - npm or yarn
+- PostgreSQL (for backend server)
 
 ### Setup Steps
 
@@ -67,13 +68,28 @@ A comprehensive ERP solution designed specifically for rubber manufacturing busi
    ```
 
 3. **Configure environment variables**
-   - Create a `.env` file in the root directory
-   - Add your Supabase credentials:
+   - Copy `.env.example` to `.env`:
+     ```bash
+     cp .env.example .env
      ```
-     SUPABASE_URL=your_supabase_url
-     SUPABASE_ANON_KEY=your_supabase_anon_key
-     JWT_SECRET=your_jwt_secret
-     DATABASE_URL=your_database_url
+   - Edit `.env` and fill in your actual values:
+     ```env
+     # Supabase Configuration (Get from: https://supabase.com → Your Project → Settings → API)
+     VITE_SUPABASE_URL=https://your-project-id.supabase.co
+     VITE_SUPABASE_ANON_KEY=your-anon-key-here
+     
+     # JWT Configuration (Use a strong random string)
+     JWT_SECRET=your-jwt-secret-key-here
+     
+     # PostgreSQL Database Configuration
+     DB_HOST=localhost
+     DB_PORT=5432
+     DB_NAME=rubber_erp
+     DB_USER=postgres
+     DB_PASSWORD=your-database-password
+     
+     # Server Configuration
+     PORT=3000
      ```
 
 4. **Initialize the database**

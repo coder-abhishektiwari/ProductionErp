@@ -11,9 +11,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// ⬇️ PASTE YOUR SUPABASE CREDENTIALS HERE ⬇️
-const SUPABASE_URL = 'https://qynhvfyzrwqfmopjbppb.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5bmh2Znl6cndxZm1vcGpicHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMjIxMDAsImV4cCI6MjA5MDg5ODEwMH0.Xm7txUqsJp5dFICdS1jQv9vslGjvX-dg4hDkDpNxpfo';
+// ⬇️ READ FROM ENVIRONMENT VARIABLES ⬇️
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // ── Supabase Client ────────────────────────────────────────
 let supabase = null;

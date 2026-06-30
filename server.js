@@ -7,18 +7,21 @@ import pg from 'pg';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const { Pool } = pg;
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 
 // ── CONFIG & WEBSOCKETS ──────────────────────────────────
-const JWT_SECRET = 'rubber-erp-prod-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET || '';
 wss.on('connection', ws => {
   ws.on('error', console.error);
 });
@@ -152,11 +155,11 @@ app.post('/api/system/companies', async (req, res) => {
 
 // ── PostgreSQL Connection Pool ────────────────────────────
 const pool = new Pool({
-  host: 'localhost',
-  port: 5378,
-  database: 'rubber_erp',
-  user: 'postgres',
-  password: 'rubber_erp_2026',
+  host: process.env.DB_HOST || '',
+  port: parseInt(process.env.DB_PORT),
+  database: process.env.DB_NAME || '',
+  user: process.env.DB_USER || '',
+  password: process.env.DB_PASSWORD || '',
   max: 20,             // max pool connections
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
