@@ -26,6 +26,7 @@ import ReportsView from './views/reports.js';
 import MastersView from './views/masters.js';
 import BackupView from './views/backup.js';
 import LoginView from './views/login.js';
+import AboutDeveloperView from './views/about-developer.js';
 
 await db.init();
 SyncEngine.init(db);
@@ -89,6 +90,7 @@ function navigateTo(route) {
         'company-details': CompanyDetailsView,
         'backup': BackupView,
         'system': SystemView,
+        'about-developer': AboutDeveloperView,
     };
 
     if (!viewCache[route]) {
@@ -133,7 +135,7 @@ document.getElementById('btn-export-backup')?.addEventListener('click', () => {
     try {
         const backup = {
             _meta: {
-                app: 'RubberERP',
+                app: 'ProductionERP',
                 version: '3.0-supabase',
                 exportDate: new Date().toISOString(),
             },
@@ -143,7 +145,7 @@ document.getElementById('btn-export-backup')?.addEventListener('click', () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `RubberERP_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `ProductionERP_Backup_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
         alert('✅ Quick Backup exported successfully!');

@@ -1,5 +1,5 @@
 -- ============================================================
--- SUPABASE SCHEMA — RubberERP (Full Relational)
+-- SUPABASE SCHEMA — ProductionERP (Full Relational)
 -- ============================================================
 -- Mirrors IndexedDB structure EXACTLY — each db.data key = 1 table
 -- Multi-tenant via company_id, Multi-owner via company_owners

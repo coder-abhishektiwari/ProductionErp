@@ -19,7 +19,7 @@ export function createLayout(navigate) {
         <div class="brand">
           <div class="brand-icon">R</div>
           <div class="brand-info">
-            <div class="brand-name">RubberERP</div>
+            <div class="brand-name">ProductionERP</div>
             <div class="brand-subname" style="font-size: 11px; opacity: 0.8; font-weight: 500;">${localStorage.getItem('company_name') || ''}</div>
           </div>
         </div>
@@ -85,21 +85,26 @@ export function createLayout(navigate) {
               <i class="ph ph-chart-line-up"></i> Reports
            </a>` : ''}
 
-           ${isAdmin ? `
-           <div class="nav-section-title">Setup</div>
-           <a href="#" class="nav-item" data-route="masters">
-              <i class="ph ph-database"></i> Masters
-           </a>
-           <a href="#" class="nav-item" data-route="company-details">
-              <i class="ph ph-buildings"></i> Company Details
-           </a>
-           <a href="#" class="nav-item" data-route="backup">
-              <i class="ph ph-cloud-arrow-down"></i> Backup & Restore
-           </a>
-           <a href="#" class="nav-item" data-route="system">
-              <i class="ph ph-shield-check"></i> System Settings
-           </a>` : ''}
-        </div>
+            ${isAdmin ? `
+            <div class="nav-section-title">Setup</div>
+            <a href="#" class="nav-item" data-route="masters">
+               <i class="ph ph-database"></i> Masters
+            </a>
+            <a href="#" class="nav-item" data-route="company-details">
+               <i class="ph ph-buildings"></i> Company Details
+            </a>
+            <a href="#" class="nav-item" data-route="backup">
+               <i class="ph ph-cloud-arrow-down"></i> Backup & Restore
+            </a>
+            <a href="#" class="nav-item" data-route="system">
+               <i class="ph ph-shield-check"></i> System Settings
+            </a>` : ''}
+
+            <div class="nav-section-title" style="margin-top: 1rem;">Info</div>
+            <a href="#" class="nav-item" data-route="about-developer">
+               <i class="ph ph-user-circle"></i> About Developer
+            </a>
+         </div>
       </aside>
       <div class="main-wrapper">
         <header class="topbar">
@@ -157,7 +162,7 @@ export function createLayout(navigate) {
                 'production-product': 'Stage 2: Product Making',
                 'company-details': 'Company Details',
             };
-            pageTitleEl.innerText = titles[route] || 'RubberERP';
+            pageTitleEl.innerText = titles[route] || 'ProductionERP';
         }
     }
 

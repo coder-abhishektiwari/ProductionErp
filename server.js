@@ -485,7 +485,7 @@ app.get('/api/backup/export', async (req, res) => {
 
     const backup = {
       _meta: {
-        app: 'RubberERP',
+        app: 'ProductionERP',
         version: '2.0',
         exportDate: new Date().toISOString(),
         tables: Object.keys(state),
@@ -740,7 +740,7 @@ app.get('/api/health', async (req, res) => {
 
 // ── Start Server ─────────────────────────────────────────
 server.listen(PORT, () => {
-  console.log(`🚀 RubberERP PostgreSQL Server running on http://localhost:${PORT}`);
+  console.log(`🚀 ProductionERP PostgreSQL Server running on http://localhost:${PORT}`);
   console.log(`📊 Database: rubber_erp @ localhost:5378`);
   console.log(`💾 Backup Export: GET  /api/backup/export`);
   console.log(`📥 Backup Import: POST /api/backup/import { data, strategy: 'replace'|'merge'|'add_only' }`);

@@ -65,7 +65,7 @@ export default function LoginView() {
                 <div class="card" style="width:100%;max-width:420px;">
                     <div class="text-center mb-6">
                         <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:1.5rem;font-weight:700;color:white;box-shadow:0 8px 24px rgba(99,102,241,0.4);">R</div>
-                        <h2 style="font-size:1.4rem;font-weight:700;margin:0;">RubberERP</h2>
+                        <h2 style="font-size:1.4rem;font-weight:700;margin:0;">ProductionERP</h2>
                         <p class="text-sm text-muted" style="margin-top:4px;">Software Login</p>
                     </div>
 

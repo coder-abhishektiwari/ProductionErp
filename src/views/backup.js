@@ -141,7 +141,7 @@ export default function BackupView() {
         try {
             const backup = {
                 _meta: {
-                    app: 'RubberERP',
+                    app: 'ProductionERP',
                     version: '3.0-supabase',
                     exportDate: new Date().toISOString(),
                     tables: Object.keys(db.data),
@@ -159,7 +159,7 @@ export default function BackupView() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `RubberERP_Backup_${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `ProductionERP_Backup_${new Date().toISOString().split('T')[0]}.json`;
             a.click();
             URL.revokeObjectURL(url);
             
