@@ -17,7 +17,7 @@ export function createLayout(navigate) {
    const template = `
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand-icon">R</div>
+          <img src="/favicon.svg" alt="ProductionERP" class="brand-icon" />
           <div class="brand-info">
             <div class="brand-name">ProductionERP</div>
             <div class="brand-subname" style="font-size: 11px; opacity: 0.8; font-weight: 500;">${localStorage.getItem('company_name') || ''}</div>

@@ -69,7 +69,7 @@ body::after {
 }
 .brand-icon {
   width: 34px; height: 34px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #cacad3, #ffffff);
   border-radius: var(--radius-md);
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 1.1rem;
