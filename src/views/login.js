@@ -1,6 +1,12 @@
 import { SyncEngine } from '../store/supabase-sync.js';
 import { isSupabaseConfigured } from '../store/supabase-config.js';
 
+// ═══════════════════════════════════════════════════════════
+// MOCK LOGIN FEATURE FLAG
+// Set to false to completely disable mock login functionality
+// ═══════════════════════════════════════════════════════════
+const ENABLE_MOCK_LOGIN = false;
+
 export default function LoginView() {
     const c = document.createElement('div');
     c.className = 'login-container';
@@ -22,6 +28,98 @@ export default function LoginView() {
         state.masterUser = { username: savedMaster, displayName: savedMaster };
         state.view = 'companies';
     }
+
+    // ── Mock Login ─────────────────────────────────────────
+    const doMockLogin = async () => {
+        try {
+            console.log('🔄 Starting mock login...');
+            
+            // Fetch mock data
+            const response = await fetch('/mock-data.json');
+            console.log('📦 Mock data fetch response:', response.status);
+            if (!response.ok) throw new Error('Failed to load mock data file: ' + response.status);
+            const mockData = await response.json();
+            console.log('📦 Mock data loaded:', mockData);
+            
+            // Store mock data in IndexedDB
+            const dbModule = await import('../store/db.js');
+            const db = dbModule.db;
+            console.log('💾 DB instance:', db);
+            
+            // Initialize db if not already done
+            if (!db.data) {
+                console.log('🔄 Initializing DB...');
+                await db.init();
+            }
+            
+            console.log('💾 Current DB data before merge:', {
+                chemicals: db.data.chemicals?.length,
+                products: db.data.products?.length,
+                customers: db.data.customers?.length,
+            });
+            
+            // Load all static data (excluding calculated fields)
+            const staticKeys = [
+                'chemicals', 'products', 'sheetTypes', 'customers', 'suppliers',
+                'accounts', 'accountGroups', 'companyInfo', 'sequences',
+                'companyUsers'
+            ];
+            
+            let loadedCount = 0;
+            for (const key of staticKeys) {
+                if (mockData[key]) {
+                    console.log(`📝 Processing ${key}:`, mockData[key]);
+                    if (key === 'companyInfo') {
+                        db.data.companyInfo = { ...db.data.companyInfo, ...mockData[key] };
+                    } else if (key === 'sequences') {
+                        db.data.sequences = { ...db.data.sequences, ...mockData[key] };
+                    } else if (Array.isArray(mockData[key])) {
+                        // Merge arrays, avoiding duplicates by id
+                        const existingIds = new Set((db.data[key] || []).map(item => item.id));
+                        const newItems = mockData[key].filter(item => !existingIds.has(item.id));
+                        db.data[key] = [...(db.data[key] || []), ...newItems];
+                        console.log(`   Added ${newItems.length} new items to ${key}`);
+                    }
+                    loadedCount++;
+                }
+            }
+            
+            console.log(`✅ Loaded ${loadedCount} data categories from mock`);
+            
+            // Set user session
+            localStorage.setItem('token', 'mock_' + Date.now());
+            localStorage.setItem('role', 'ADMIN');
+            localStorage.setItem('username', 'mock_user');
+            localStorage.setItem('master_username', 'mock_user');
+            localStorage.setItem('company_id', 'MOCK_COMP');
+            localStorage.setItem('company_name', 'Mock Company');
+            localStorage.setItem('isMockLogin', 'true');
+            
+            // Save to IndexedDB
+            console.log('💾 Saving to IndexedDB...');
+            await db.saveData();
+            console.log('✅ Data saved to IndexedDB');
+            
+            console.log('✅ Mock login successful, final data:', {
+                chemicals: db.data.chemicals?.length,
+                products: db.data.products?.length,
+                customers: db.data.customers?.length,
+                suppliers: db.data.suppliers?.length,
+                accounts: db.data.accounts?.length,
+                companyInfo: db.data.companyInfo,
+            });
+            
+            // Small delay to ensure data is saved
+            setTimeout(() => {
+                console.log('🚀 Redirecting to dashboard...');
+                window.location.hash = 'dashboard';
+                window.location.reload();
+            }, 500);
+        } catch (e) {
+            console.error('❌ Mock login failed:', e);
+            alert('Mock login failed: ' + e.message);
+        }
+    };
 
     // ── Offline Login ──────────────────────────────────────
     const doOfflineLogin = () => {
@@ -62,13 +160,17 @@ export default function LoginView() {
         // ══════════════════════════════════════════════════
         if (state.view === 'master_login') {
             c.innerHTML = `
-                <div class="card" style="width:100%;max-width:420px;">
+                <div class="card" style="width:100%;min-width:380px; ">
                     <div class="text-center mb-6">
-                        <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:1.5rem;font-weight:700;color:white;box-shadow:0 8px 24px rgba(99,102,241,0.4);">R</div>
+                        <img src="/favicon.svg" alt="ProductionERP Logo" style="width:56px;height:56px;border-radius:14px;margin:0 auto 12px;box-shadow:0 8px 24px rgba(99,102,241,0.4);">
                         <h2 style="font-size:1.4rem;font-weight:700;margin:0;">ProductionERP</h2>
                         <p class="text-sm text-muted" style="margin-top:4px;">Software Login</p>
                     </div>
 
+                    ${ENABLE_MOCK_LOGIN ? `
+                        <button class="btn btn-success w-full mb-2" id="btn-mock-login">
+                            <i class="ph ph-flask"></i> Mock Login (Demo Data)
+                        </button>` : ''}
                     ${!configured ? `
                         <div class="alert alert-warning mb-4" style="flex-direction:column;align-items:flex-start;gap:6px;">
                             <div style="display:flex;align-items:center;gap:8px;">
@@ -108,6 +210,12 @@ export default function LoginView() {
                 </div>
             `;
 
+            if (ENABLE_MOCK_LOGIN) {
+                const mockBtn = c.querySelector('#btn-mock-login');
+                if (mockBtn) {
+                    mockBtn.addEventListener('click', doMockLogin);
+                }
+            }
             c.querySelector('#btn-offline')?.addEventListener('click', doOfflineLogin);
             c.querySelector('#btn-register-switch')?.addEventListener('click', () => {
                 state.view = 'master_register';
@@ -146,7 +254,7 @@ export default function LoginView() {
         // ══════════════════════════════════════════════════
         else if (state.view === 'master_register') {
             c.innerHTML = `
-                <div class="card" style="width:100%;max-width:420px;">
+                <div class="card" style="width:100%;min-width:380px;">
                     <button class="btn btn-sm btn-ghost mb-4 text-muted" id="btn-back">
                         <i class="ph ph-arrow-left"></i> Back to Login
                     </button>
@@ -217,7 +325,7 @@ export default function LoginView() {
         // ══════════════════════════════════════════════════
         else if (state.view === 'companies') {
             c.innerHTML = `
-                <div class="card" style="width:100%;max-width:450px;">
+                <div class="card" style="width:100%;min-width:380px;">
                     <div class="flex justify-between items-center mb-4">
                         <div>
                             <p class="text-sm text-muted">Welcome back,</p>
@@ -314,7 +422,7 @@ export default function LoginView() {
         // ══════════════════════════════════════════════════
         else if (state.view === 'create_company') {
             c.innerHTML = `
-                <div class="card" style="width:100%;max-width:420px;">
+                <div class="card" style="width:100%;min-width:380px;">
                     <button class="btn btn-sm btn-ghost mb-4 text-muted" id="btn-back-comp">
                         <i class="ph ph-arrow-left"></i> Back
                     </button>

@@ -12,6 +12,9 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
+# Mock data (for testing only - not for production)
+public/mock-data.json
+
 node_modules
 dist
 dist-ssr
